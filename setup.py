@@ -20,6 +20,7 @@ install_requires = [
     'adafruit-circuitpython-sgp30',
     'adafruit-circuitpython-ahtx0',
     'adafruit-circuitpython-scd4x',
+    'adafruit-circuitpython-ccs811',
     'paho-mqtt',
 ]
 
