@@ -66,7 +66,7 @@ class CCS811Custom(adafruit_ccs811.CCS811):
 
     def read_data(self) -> (Optional[int], Optional[int]):
         self.reset_r()
-        if self.data_ready:
+        if self.data_ready and self.app_valid:
             buf = bytearray(9)
             buf[0] = adafruit_ccs811._ALG_RESULT_DATA
             with self.i2c_device as i2c:
@@ -136,6 +136,7 @@ sgp30.iaq_init()
 eavg = ExpAverage(0.1)
 scd4x.start_periodic_measurement()
 # ccs811.drive_mode = adafruit_ccs811.DRIVE_MODE_250MS
+# ccs811.drive_mode = adafruit_ccs811.DRIVE_MODE_10SEC
 
 last_ccs811_co2 = 0
 last_ccs811_tvoc = 0
@@ -185,7 +186,7 @@ while True:
         if inv_ctr:
             print(f'  CCS inv read, orig ({nccs_co2}, {nccs_tvoc}), status: {ccs811.r_status}, '
                   f'error id: {ccs811.r_error_id} = [{ccs811.r_err_str}] [{ccs811.r_stat_str}], '
-                  f'raw I={ccs811.r_raw_current} uA, U={ccs811.r_raw_adc} V')
+                  f'raw I={ccs811.r_raw_current} uA, U={ccs811.r_raw_adc} V, Fw: {ccs811.fw_mode} Dm: {ccs811.drive_mode}')
 
         if ccs811.error:
             print(f'Err: {ccs811.r_error} = {CCS811Custom.err_to_str(ccs811.r_error)}')
