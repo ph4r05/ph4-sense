@@ -4,9 +4,10 @@ import busio
 import json
 import adafruit_sgp30  # adafruit-circuitpython-sgp30
 import adafruit_ahtx0  # adafruit-circuitpython-ahtx0
-import adafruit_ccs811 # adafruit-circuitpython-ccs811
+import adafruit_ccs811  # adafruit-circuitpython-ccs811
 import adafruit_scd4x  # adafruit-circuitpython-scd4x
 import paho.mqtt.client as mqtt  # paho-mqtt
+
 
 class ExpAverage:
     def __init__(self, alpha):
@@ -58,7 +59,8 @@ last_ccs811_tvoc = 0
 last_spg30_co2 = 0
 last_spg30_tvoc = 0
 
-last_pub = time.time() - 30
+last_pub = time.time() + 30
+last_pub_spg = time.time() + 30
 scd40_co2, scd40_temp, scd40_hum = None, None, None
 while True:
     t = time.time()
@@ -76,36 +78,36 @@ while True:
         print(f'E: exc in temp {e}')
 
     try:
-      sgp30.iaq_measure()
+        sgp30.iaq_measure()
     except Exception as e:
-      print(f'Exception measurement: {e}')
-      time.sleep(1)
-      continue
+        print(f'Exception measurement: {e}')
+        time.sleep(1)
+        continue
 
     ccs_co2, ccs_tvoc = 0, 0
     try:
-      if ccs811.data_ready:
-        nccs_co2, nccs_tvoc = ccs811.eco2, ccs811.tvoc
-        if 100 < nccs_co2 < 30_000:
-          last_ccs811_co2 = ccs_co2 = nccs_co2
-        if 0 <= nccs_tvoc < 30_000:
-          last_ccs811_tvoc = ccs_tvoc = nccs_tvoc
-      if ccs811.error:
-        print(f'Err: {ccs811.error_code}')
+        ccs811._update_data()
+        nccs_co2, nccs_tvoc = ccs811._eco2, ccs811._tvoc
+        if nccs_co2 and 100 < nccs_co2 < 30_000:
+            last_ccs811_co2 = ccs_co2 = nccs_co2
+        if nccs_tvoc and 0 <= nccs_tvoc < 30_000:
+            last_ccs811_tvoc = ccs_tvoc = nccs_tvoc
+        if ccs811.error:
+            print(f'Err: {ccs811.error_code}')
     except Exception as e:
-      print(f'CCS error: {e}')
+        print(f'CCS error: {e}')
 
     try:
-      co2eq_1, tvoc, eth, h2 = sgp30.eCO2, sgp30.TVOC, sgp30.Ethanol, sgp30.H2
-      if co2eq_1:
-          last_spg30_co2 = co2eq_1
-      if tvoc:
-          last_spg30_tvoc = tvoc
+        co2eq_1, tvoc, eth, h2 = sgp30.eCO2, sgp30.TVOC, sgp30.Ethanol, sgp30.H2
+        if co2eq_1:
+            last_spg30_co2 = co2eq_1
+        if tvoc:
+            last_spg30_tvoc = tvoc
 
-      co2eq = eavg.update((last_spg30_co2 + last_ccs811_co2) / 2) if last_spg30_co2 and last_spg30_co2 else 0
+        co2eq = eavg.update((last_spg30_co2 + last_ccs811_co2) / 2) if last_spg30_co2 and last_spg30_co2 else 0
     except Exception as e:
-      print(f'SPG30 err: {e}')
-      continue
+        print(f'SPG30 err: {e}')
+        continue
 
     if scd4x.data_ready:
         try:
@@ -113,13 +115,33 @@ while True:
         except Exception as e:
             print(f'Err SDC40: {e}')
 
-    print("CO2eq: %4d (%4d) ppm, TVOC: %4d ppb, CO2: %4d, TVOC2: %4d, Eth: %5d, H2: %5d, %4.2f C, humd: %4.2f%%, SCD40: %4.2f, %4.2f C, %4.2f%%" % (co2eq, co2eq_1, tvoc, ccs_co2, ccs_tvoc, eth, h2, temp or -1, humd or -1, scd40_co2 or -1, scd40_temp or -1, scd40_hum or -1))
+    print(
+        "CO2eq: %4d (%4d) ppm, TVOC: %4d ppb, CO2: %4d, TVOC2: %4d, Eth: %5d, H2: %5d, %4.2f C, humd: %4.2f%%, SCD40: %4.2f, %4.2f C, %4.2f%%" % (
+            co2eq, co2eq_1, tvoc, ccs_co2, ccs_tvoc, eth, h2, temp or -1, humd or -1, scd40_co2 or -1, scd40_temp or -1,
+            scd40_hum or -1))
 
-    if t - last_pub > 30:
-        print(client.publish("sensors/sgp30_office", json.dumps({'eCO2': co2eq, 'TVOC': tvoc, 'Eth': eth, 'H2': h2, 'temp': temp, 'humidity': humd})))
-        if scd40_co2 is not None and scd40_co2 > 0:
-            print(client.publish("sensors/scd40_office", json.dumps({'eCO2': scd40_co2, 'temp': scd40_temp, 'humidity': scd40_hum})))
+    if t - last_pub > 60:
+        try:
+            print(client.publish("sensors/sgp30_office", json.dumps(
+                {'eCO2': co2eq, 'TVOC': tvoc, 'Eth': eth, 'H2': h2, 'temp': temp, 'humidity': humd})))
 
-        last_pub = t
+            print(client.publish("sensors/sgp30_raw_office", json.dumps(
+                {'eCO2': last_spg30_co2, 'TVOC': last_spg30_tvoc})))
+
+            print(client.publish("sensors/ccs811_raw_office", json.dumps(
+                {'eCO2': last_ccs811_co2, 'TVOC': last_ccs811_tvoc})))
+
+            last_pub = t
+        except Exception as e:
+            print(f'Error in pub: {e}')
+
+    if t - last_pub_spg > 60 and scd40_co2 is not None and scd40_co2 > 0:
+        try:
+            print(client.publish("sensors/scd40_office", json.dumps(
+                {'eCO2': scd40_co2, 'temp': scd40_temp, 'humidity': scd40_hum})))
+
+            last_pub_spg = t
+        except Exception as e:
+            print(f'Error in pub: {e}')
 
     time.sleep(1)
