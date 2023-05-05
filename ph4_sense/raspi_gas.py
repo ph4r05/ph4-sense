@@ -75,11 +75,11 @@ class CCS811Custom(adafruit_ccs811.CCS811):
             # https://cdn.sparkfun.com/assets/2/c/c/6/5/CN04-2019_attachment_CCS811_Datasheet_v1-06.pdf
             self._eco2 = (buf[1] << 8) | (buf[2])
             self._tvoc = (buf[3] << 8) | (buf[4])
-            self.r_status = buf[4]
-            self.r_error_id = buf[5]
-            self.r_raw_data = buf[6:8]
-            self.r_raw_current = int((buf[6] & (~0x3)) >> 2)
-            self.r_raw_adc = (1.65/1023) * (int(buf[6] & 0x3) << 8 | int(buf[7]))
+            self.r_status = buf[5]
+            self.r_error_id = buf[6]
+            self.r_raw_data = buf[7:9]
+            self.r_raw_current = int((buf[7] & (~0x3)) >> 2)
+            self.r_raw_adc = (1.65/1023) * (int(buf[7] & 0x3) << 8 | int(buf[8]))
             self.r_err_str = CCS811Custom.err_to_str(self.r_error_id)
 
             if self.r_status & 0x1:
