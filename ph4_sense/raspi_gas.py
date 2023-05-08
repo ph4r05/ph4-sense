@@ -37,6 +37,8 @@ class FloatingMedian:
         self._median = None
 
     def add(self, value):
+        if value is None:
+            return
         self._median = None
         self.data.append(value)
 
@@ -53,6 +55,26 @@ class FloatingMedian:
     @property
     def cur(self):
         return self.median()
+
+
+class SensorFilter:
+    def __init__(self, median_window=5, alpha=0.1):
+        self.floating_median = FloatingMedian(median_window)
+        self.exp_average = ExpAverage(alpha)
+
+    def update(self, value):
+        r = self.floating_median.update(value)
+        if r is not None:
+            return self.exp_average.update(r)
+        return None
+
+    @property
+    def cur(self):
+        return self.exp_average.cur
+
+    @property
+    def cur_median(self):
+        return self.floating_median.cur
 
 
 class CCS811Custom(adafruit_ccs811.CCS811):
@@ -188,10 +210,10 @@ sgp30.set_iaq_baseline(0x8973, 0x8aae)
 sgp30.iaq_init()
 
 eavg = ExpAverage(0.1)
-eavg_css811_co2 = ExpAverage(0.2)
-eavg_sgp30_co2 = ExpAverage(0.2)
-eavg_css811_tvoc = FloatingMedian(5)
-eavg_sgp30_tvoc = FloatingMedian(5)
+eavg_css811_co2 = SensorFilter(median_window=5, alpha=0.2)
+eavg_sgp30_co2 = SensorFilter(median_window=5, alpha=0.2)
+eavg_css811_tvoc = SensorFilter(median_window=5, alpha=0.2)
+eavg_sgp30_tvoc = SensorFilter(median_window=5, alpha=0.2)
 
 scd4x.start_periodic_measurement()
 # ccs811.drive_mode = adafruit_ccs811.DRIVE_MODE_60SEC
@@ -215,9 +237,12 @@ while True:
     try:
         cal_temp = scd40_temp
         cal_hum = scd40_hum
+
+        temp = try_fnc(lambda: aht21.temperature)
+        humd = try_fnc(lambda: aht21.relative_humidity)
         if not cal_temp or not cal_hum:
-            cal_temp = try_fnc(lambda: aht21.temperature)
-            cal_hum = try_fnc(lambda: aht21.relative_humidity)
+            cal_temp = temp
+            cal_hum = humd
 
         if cal_temp and cal_hum and time.time() - last_tsync > 180:
             try_fnc(lambda: sgp30.set_iaq_relative_humidity(cal_temp, cal_hum))
@@ -306,8 +331,14 @@ while True:
             print(client.publish("sensors/sgp30_raw_office", json.dumps(
                 {'eCO2': last_sgp30_co2, 'TVOC': last_sgp30_tvoc})))
 
+            print(client.publish("sensors/sgp30_filt_office", json.dumps(
+                {'eCO2': eavg_sgp30_co2.cur, 'TVOC': eavg_sgp30_tvoc.cur})))
+
             print(client.publish("sensors/ccs811_raw_office", json.dumps(
                 {'eCO2': last_ccs811_co2, 'TVOC': last_ccs811_tvoc})))
+
+            print(client.publish("sensors/ccs811_filt_office", json.dumps(
+                {'eCO2': eavg_css811_co2.cur, 'TVOC': eavg_css811_tvoc.cur})))
 
             last_pub = t
         except Exception as e:
