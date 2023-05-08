@@ -12,9 +12,9 @@ import paho.mqtt.client as mqtt  # paho-mqtt
 
 
 class ExpAverage:
-    def __init__(self, alpha):
+    def __init__(self, alpha, default=None):
         self.alpha = alpha
-        self.average = None
+        self.average = default
 
     def update(self, value):
         if self.average is None:
@@ -130,6 +130,10 @@ def try_fnc(x, msg=None):
         print(f'Err {msg or ""}: {e}')
 
 
+def dval(val, default=-1):
+    return val if val is not None else default
+
+
 # Initialize I2C bus
 # i2c = busio.I2C(board.SCL7, board.SDA7)
 i2c = busio.I2C(board.SCL, board.SDA)
@@ -151,7 +155,13 @@ client.connect("10.0.1.103", 1883)
 sgp30.set_iaq_relative_humidity(21, 0.45)
 sgp30.set_iaq_baseline(0x8973, 0x8aae)
 sgp30.iaq_init()
+
 eavg = ExpAverage(0.1)
+eavg_css811_co2 = ExpAverage(0.25)
+eavg_sgp30_co2 = ExpAverage(0.25)
+eavg_css811_tvoc = ExpAverage(0.25)
+eavg_sgp30_tvoc = ExpAverage(0.25)
+
 scd4x.start_periodic_measurement()
 # ccs811.drive_mode = adafruit_ccs811.DRIVE_MODE_60SEC
 ccs811.drive_mode = adafruit_ccs811.DRIVE_MODE_1SEC
@@ -160,11 +170,11 @@ ccs811.drive_mode = adafruit_ccs811.DRIVE_MODE_1SEC
 
 last_ccs811_co2 = 0
 last_ccs811_tvoc = 0
-last_spg30_co2 = 0
-last_spg30_tvoc = 0
+last_sgp30_co2 = 0
+last_sgp30_tvoc = 0
 
 last_pub = time.time() + 30
-last_pub_spg = time.time() + 30
+last_pub_sgp = time.time() + 30
 scd40_co2, scd40_temp, scd40_hum = None, None, None
 while True:
     t = time.time()
@@ -195,18 +205,22 @@ while True:
 
         if nccs_co2 is not None and 400 < nccs_co2 < 30_000:
             last_ccs811_co2 = ccs_co2 = nccs_co2
+            eavg_css811_co2.update(nccs_co2)
         else:
             inv_ctr += 1
 
         if nccs_tvoc is not None and 0 <= nccs_tvoc < 30_000:
             last_ccs811_tvoc = ccs_tvoc = nccs_tvoc
+            eavg_css811_tvoc.update(nccs_tvoc)
         else:
             inv_ctr += 1
 
         if inv_ctr or ccs811.r_overflow:
-            print(f'  CCS inv read, orig ({ccs811.r_orig_co2} {(nccs_co2 or 0)& ~0x8000}, {ccs811.r_orig_tvoc}), status: {ccs811.r_status}, '
+            print(f'  CCS inv read, orig ({ccs811.r_orig_co2} {(nccs_co2 or 0)& ~0x8000}, {ccs811.r_orig_tvoc}), '
+                  f'status: {ccs811.r_status}, '
                   f'error id: {ccs811.r_error_id} = [{ccs811.r_err_str}] [{ccs811.r_stat_str}], '
-                  f'raw I={ccs811.r_raw_current} uA, U={ccs811.r_raw_adc} V, Fw: {ccs811.fw_mode} Dm: {ccs811.drive_mode}')
+                  f'raw I={ccs811.r_raw_current} uA, U={dval(ccs811.r_raw_adc):.5f} V, '
+                  f'Fw: {int(dval(ccs811.fw_mode))} Dm: {ccs811.drive_mode}')
 
         if ccs811.error:
             print(f'Err: {ccs811.r_error} = {CCS811Custom.err_to_str(ccs811.r_error)}')
@@ -217,16 +231,20 @@ while True:
         valid_cnt = 0
         co2eq_1, tvoc, eth, h2 = sgp30.eCO2, sgp30.TVOC, sgp30.Ethanol, sgp30.H2
         if co2eq_1:
-            last_spg30_co2 = co2eq_1
+            eavg_sgp30_co2.update(co2eq_1)
+            last_sgp30_co2 = co2eq_1
             valid_cnt += 1
+
         if tvoc:
-            last_spg30_tvoc = tvoc
+            last_sgp30_tvoc = tvoc
+            eavg_sgp30_tvoc.update(tvoc)
+
         if last_ccs811_co2:
             valid_cnt += 1
 
-        co2eq = eavg.update((last_spg30_co2 + last_ccs811_co2) / valid_cnt) if valid_cnt else 0
+        co2eq = eavg.update((last_sgp30_co2 + last_ccs811_co2) / valid_cnt) if valid_cnt else 0.0
     except Exception as e:
-        print(f'SPG30 err: {e}')
+        print(f'SGP30 err: {e}')
         continue
 
     if scd4x.data_ready:
@@ -236,9 +254,12 @@ while True:
             print(f'Err SDC40: {e}')
 
     print(
-        "CO2eq: %4d (%4d) ppm, TVOC: %4d ppb, CO2: %4d, TVOC2: %4d, Eth: %5d, H2: %5d, %4.2f C, humd: %4.2f%%, SCD40: %4.2f, %4.2f C, %4.2f%%" % (
-            co2eq, co2eq_1, tvoc, ccs_co2, ccs_tvoc, eth, h2, temp or -1, humd or -1, scd40_co2 or -1, scd40_temp or -1,
-            scd40_hum or -1))
+        f"CO2eq: {dval(co2eq):4.1f} (r={dval(co2eq_1):4d}) ppm, TVOC: {dval(tvoc):4d} ppb, "
+        f"CCS CO2: {dval(ccs_co2):4d} ({dval(eavg_css811_co2.average):4.1f}), "
+        f"TVOC2: {dval(ccs_tvoc):3d} ({dval(eavg_css811_tvoc.average):3.1f}), "
+        f"Eth: {dval(eth):5d}, H2: {h2:5d}, {dval(temp):4.2f} C, {dval(humd):4.2f} %%, "
+        f"SCD40: {dval(scd40_co2):4.2f}, {dval(scd40_temp):4.2f} C, {dval(scd40_hum):4.2f} %% "
+    )
 
     if t - last_pub > 60:
         try:
@@ -246,7 +267,7 @@ while True:
                 {'eCO2': co2eq, 'TVOC': tvoc, 'Eth': eth, 'H2': h2, 'temp': temp, 'humidity': humd})))
 
             print(client.publish("sensors/sgp30_raw_office", json.dumps(
-                {'eCO2': last_spg30_co2, 'TVOC': last_spg30_tvoc})))
+                {'eCO2': last_sgp30_co2, 'TVOC': last_sgp30_tvoc})))
 
             print(client.publish("sensors/ccs811_raw_office", json.dumps(
                 {'eCO2': last_ccs811_co2, 'TVOC': last_ccs811_tvoc})))
@@ -255,12 +276,12 @@ while True:
         except Exception as e:
             print(f'Error in pub: {e}')
 
-    if t - last_pub_spg > 60 and scd40_co2 is not None and scd40_co2 > 0:
+    if t - last_pub_sgp > 60 and scd40_co2 is not None and scd40_co2 > 0:
         try:
             print(client.publish("sensors/scd40_office", json.dumps(
                 {'eCO2': scd40_co2, 'temp': scd40_temp, 'humidity': scd40_hum})))
 
-            last_pub_spg = t
+            last_pub_sgp = t
         except Exception as e:
             print(f'Error in pub: {e}')
 
