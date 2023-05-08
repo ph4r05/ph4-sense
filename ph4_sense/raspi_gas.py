@@ -4,6 +4,8 @@ from typing import Optional
 import board  # adafruit-blinka
 import busio
 import json
+from collections import deque
+import statistics
 import adafruit_sgp30  # adafruit-circuitpython-sgp30
 import adafruit_ahtx0  # adafruit-circuitpython-ahtx0
 import adafruit_ccs811  # adafruit-circuitpython-ccs811
@@ -12,7 +14,7 @@ import paho.mqtt.client as mqtt  # paho-mqtt
 
 
 class ExpAverage:
-    def __init__(self, alpha, default=None):
+    def __init__(self, alpha=0.1, default=None):
         self.alpha = alpha
         self.average = default
 
@@ -22,6 +24,35 @@ class ExpAverage:
         else:
             self.average = self.alpha * value + (1 - self.alpha) * self.average
         return self.average
+
+    @property
+    def cur(self):
+        return self.average
+
+
+class FloatingMedian:
+    def __init__(self, window_size=5):
+        self.window_size = window_size
+        self.data = deque([], maxlen=window_size)
+        self._median = None
+
+    def add(self, value):
+        self._median = None
+        self.data.append(value)
+
+    def update(self, value):
+        self.add(value)
+        return self.median()
+
+    def median(self):
+        if self._median is None:
+            self._median = statistics.median(self.data)
+
+        return self._median
+
+    @property
+    def cur(self):
+        return self.median()
 
 
 class CCS811Custom(adafruit_ccs811.CCS811):
@@ -157,10 +188,10 @@ sgp30.set_iaq_baseline(0x8973, 0x8aae)
 sgp30.iaq_init()
 
 eavg = ExpAverage(0.1)
-eavg_css811_co2 = ExpAverage(0.25)
-eavg_sgp30_co2 = ExpAverage(0.25)
-eavg_css811_tvoc = ExpAverage(0.25)
-eavg_sgp30_tvoc = ExpAverage(0.25)
+eavg_css811_co2 = ExpAverage(0.2)
+eavg_sgp30_co2 = ExpAverage(0.2)
+eavg_css811_tvoc = FloatingMedian(5)
+eavg_sgp30_tvoc = FloatingMedian(5)
 
 scd4x.start_periodic_measurement()
 # ccs811.drive_mode = adafruit_ccs811.DRIVE_MODE_60SEC
@@ -173,6 +204,7 @@ last_ccs811_tvoc = 0
 last_sgp30_co2 = 0
 last_sgp30_tvoc = 0
 
+last_tsync = time.time() + 60
 last_pub = time.time() + 30
 last_pub_sgp = time.time() + 30
 scd40_co2, scd40_temp, scd40_hum = None, None, None
@@ -181,11 +213,16 @@ while True:
     temp = None
     humd = None
     try:
-        temp = try_fnc(lambda: aht21.temperature)
-        humd = try_fnc(lambda: aht21.relative_humidity)
-        if temp and humd and time.time() - last_pub > 3600:
-            try_fnc(lambda: sgp30.set_iaq_relative_humidity(temp, humd))
-            try_fnc(lambda: ccs811.set_environmental_data(int(humd), temp))
+        cal_temp = scd40_temp
+        cal_hum = scd40_hum
+        if not cal_temp or not cal_hum:
+            cal_temp = try_fnc(lambda: aht21.temperature)
+            cal_hum = try_fnc(lambda: aht21.relative_humidity)
+
+        if cal_temp and cal_hum and time.time() - last_tsync > 180:
+            try_fnc(lambda: sgp30.set_iaq_relative_humidity(cal_temp, cal_hum))
+            try_fnc(lambda: ccs811.set_environmental_data(int(cal_hum), cal_temp))
+            last_tsync = time.time()
             print(f'Temp sync')
 
     except Exception as e:
@@ -255,8 +292,8 @@ while True:
 
     print(
         f"CO2eq: {dval(co2eq):4.1f} (r={dval(co2eq_1):4d}) ppm, TVOC: {dval(tvoc):4d} ppb, "
-        f"CCS CO2: {dval(ccs_co2):4d} ({dval(eavg_css811_co2.average):4.1f}), "
-        f"TVOC2: {dval(ccs_tvoc):3d} ({dval(eavg_css811_tvoc.average):3.1f}), "
+        f"CCS CO2: {dval(ccs_co2):4d} ({dval(eavg_css811_co2.cur):4.1f}), "
+        f"TVOC2: {dval(ccs_tvoc):3d} ({dval(eavg_css811_tvoc.cur):3.1f}), "
         f"Eth: {dval(eth):5d}, H2: {h2:5d}, {dval(temp):4.2f} C, {dval(humd):4.2f} %%, "
         f"SCD40: {dval(scd40_co2):4.2f}, {dval(scd40_temp):4.2f} C, {dval(scd40_hum):4.2f} %% "
     )
