@@ -25,6 +25,9 @@ class ExpAverage:
 
 
 class CCS811Custom(adafruit_ccs811.CCS811):
+    MAX_TVOC = 32_768
+    MAX_CO2 = 29_206
+
     def __init__(self, i2c_bus: busio.I2C, address: int = 0x5A):
         super().__init__(i2c_bus, address)
         self.r_status = None
@@ -35,6 +38,9 @@ class CCS811Custom(adafruit_ccs811.CCS811):
         self.r_err_str = ''
         self.r_stat_str = ''
         self.r_error = None
+        self.r_overflow = False
+        self.r_orig_co2 = None
+        self.r_orig_tvoc = None
 
     def reset_r(self):
         self.r_status = None
@@ -45,6 +51,9 @@ class CCS811Custom(adafruit_ccs811.CCS811):
         self.r_err_str = ''
         self.r_stat_str = ''
         self.r_error = None
+        self.r_overflow = False
+        self.r_orig_co2 = None
+        self.r_orig_tvoc = None
 
     @staticmethod
     def err_to_str(err: int) -> str:
@@ -73,14 +82,22 @@ class CCS811Custom(adafruit_ccs811.CCS811):
                 i2c.write_then_readinto(buf, buf, out_end=1, in_start=1)
 
             # https://cdn.sparkfun.com/assets/2/c/c/6/5/CN04-2019_attachment_CCS811_Datasheet_v1-06.pdf
-            self._eco2 = (buf[1] << 8) | (buf[2])
-            self._tvoc = (buf[3] << 8) | (buf[4])
+            self.r_orig_co2 = self._eco2 = ((buf[1] << 8) | (buf[2]))  # & ~0x8000
+            self.r_orig_tvoc = self._tvoc = ((buf[3] << 8) | (buf[4]))  # & ~0x8000
             self.r_status = buf[5]
             self.r_error_id = buf[6]
             self.r_raw_data = buf[7:9]
             self.r_raw_current = int((buf[7] & (~0x3)) >> 2)
             self.r_raw_adc = (1.65/1023) * (int(buf[7] & 0x3) << 8 | int(buf[8]))
             self.r_err_str = CCS811Custom.err_to_str(self.r_error_id)
+
+            if self._eco2 > CCS811Custom.MAX_CO2:
+                self.r_overflow = True
+                self._eco2 = self._eco2 & ~0x8000
+
+            if self._tvoc > CCS811Custom.MAX_TVOC:
+                self.r_overflow = True
+                self._tvoc = self._tvoc - CCS811Custom.MAX_TVOC
 
             if self.r_status & 0x1:
                 self.r_stat_str += 'Er '  # Error
@@ -98,9 +115,10 @@ class CCS811Custom(adafruit_ccs811.CCS811):
 
             if self.error:
                 self.r_error = self.error_code
-                raise RuntimeError("Error:" + str(self.r_error))
+                self.r_err_str = CCS811Custom.err_to_str(self.r_error)
+                raise RuntimeError(f'Error: {str(self.r_error)} [{self.r_err_str}]')
 
-            return self._eco2, self._tvoc
+            return (self._eco2, self._tvoc) # if not self.r_error_id else (None, None)
 
         return None, None
 
@@ -135,6 +153,8 @@ sgp30.set_iaq_baseline(0x8973, 0x8aae)
 sgp30.iaq_init()
 eavg = ExpAverage(0.1)
 scd4x.start_periodic_measurement()
+# ccs811.drive_mode = adafruit_ccs811.DRIVE_MODE_60SEC
+ccs811.drive_mode = adafruit_ccs811.DRIVE_MODE_1SEC
 # ccs811.drive_mode = adafruit_ccs811.DRIVE_MODE_250MS
 # ccs811.drive_mode = adafruit_ccs811.DRIVE_MODE_10SEC
 
@@ -173,18 +193,18 @@ while True:
         nccs_co2, nccs_tvoc = ccs811.read_data()
         inv_ctr = 0
 
-        if nccs_co2 and 100 < nccs_co2 < 30_000:
+        if nccs_co2 is not None and 400 < nccs_co2 < 30_000:
             last_ccs811_co2 = ccs_co2 = nccs_co2
         else:
             inv_ctr += 1
 
-        if nccs_tvoc and 0 <= nccs_tvoc < 30_000:
+        if nccs_tvoc is not None and 0 <= nccs_tvoc < 30_000:
             last_ccs811_tvoc = ccs_tvoc = nccs_tvoc
         else:
             inv_ctr += 1
 
-        if inv_ctr:
-            print(f'  CCS inv read, orig ({nccs_co2}, {nccs_tvoc}), status: {ccs811.r_status}, '
+        if inv_ctr or ccs811.r_overflow:
+            print(f'  CCS inv read, orig ({ccs811.r_orig_co2} {(nccs_co2 or 0)& ~0x8000}, {ccs811.r_orig_tvoc}), status: {ccs811.r_status}, '
                   f'error id: {ccs811.r_error_id} = [{ccs811.r_err_str}] [{ccs811.r_stat_str}], '
                   f'raw I={ccs811.r_raw_current} uA, U={ccs811.r_raw_adc} V, Fw: {ccs811.fw_mode} Dm: {ccs811.drive_mode}')
 
