@@ -46,7 +46,7 @@ class FloatingMedian:
 
     def median(self):
         if self._median is None:
-            self._median = statistics.median(self.data)
+            self._median = statistics.median(self.data) if self.data else None
 
         return self._median
 
