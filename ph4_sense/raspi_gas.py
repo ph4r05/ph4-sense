@@ -13,6 +13,16 @@ import adafruit_scd4x  # adafruit-circuitpython-scd4x
 import paho.mqtt.client as mqtt  # paho-mqtt
 
 
+MQTT_CLIENT_NAME = 'SGP30_sensor_office'
+MQTT_SERVER = '10.0.1.103'
+MQTT_SERVER_PORT = 1883
+MQTT_SENSOR_SUFFIX = '_office'
+HAS_AHT = True
+HAS_SGP30 = True
+HAS_CCS811 = True
+HAS_SCD4X = True
+
+
 class ExpAverage:
     def __init__(self, alpha=0.1, default=None):
         self.alpha = alpha
@@ -192,34 +202,37 @@ def dval(val, default=-1):
 i2c = busio.I2C(board.SCL, board.SDA)
 
 # Initialize sensors
-sgp30 = adafruit_sgp30.Adafruit_SGP30(i2c)
-aht21 = adafruit_ahtx0.AHTx0(i2c)
-ccs811 = CCS811Custom(i2c)
-scd4x = adafruit_scd4x.SCD4X(i2c)
+sgp30 = adafruit_sgp30.Adafruit_SGP30(i2c) if HAS_SGP30 else None
+aht21 = adafruit_ahtx0.AHTx0(i2c) if HAS_AHT else None
+ccs811 = CCS811Custom(i2c) if HAS_CCS811 else None
+scd4x = adafruit_scd4x.SCD4X(i2c) if HAS_SCD4X else None
+
+client = mqtt.Client(MQTT_CLIENT_NAME)
+client.connect(MQTT_SERVER, MQTT_SERVER_PORT)
+
+# Measure air quality
+if HAS_SGP30:
+    sgp30.set_iaq_relative_humidity(21, 0.45)
+    sgp30.set_iaq_baseline(0x8973, 0x8aae)
+    sgp30.iaq_init()
+
+if HAS_SCD4X:
+    scd4x.start_periodic_measurement()
+
+if HAS_CCS811:
+    ccs811.drive_mode = adafruit_ccs811.DRIVE_MODE_1SEC
+    # ccs811.drive_mode = adafruit_ccs811.DRIVE_MODE_60SEC
+    # ccs811.drive_mode = adafruit_ccs811.DRIVE_MODE_250MS
+    # ccs811.drive_mode = adafruit_ccs811.DRIVE_MODE_10SEC
 
 # Initialize sensor measurements
 co2eq = 0
 tvoc = 0
-
-client = mqtt.Client("SGP30_sensor_office")
-client.connect("10.0.1.103", 1883)
-
-# Measure air quality
-sgp30.set_iaq_relative_humidity(21, 0.45)
-sgp30.set_iaq_baseline(0x8973, 0x8aae)
-sgp30.iaq_init()
-
 eavg = ExpAverage(0.1)
-eavg_css811_co2 = SensorFilter(median_window=5, alpha=0.2)
+eavg_css811_co2 = SensorFilter(median_window=7, alpha=0.2)
 eavg_sgp30_co2 = SensorFilter(median_window=5, alpha=0.2)
-eavg_css811_tvoc = SensorFilter(median_window=5, alpha=0.2)
+eavg_css811_tvoc = SensorFilter(median_window=7, alpha=0.2)
 eavg_sgp30_tvoc = SensorFilter(median_window=5, alpha=0.2)
-
-scd4x.start_periodic_measurement()
-# ccs811.drive_mode = adafruit_ccs811.DRIVE_MODE_60SEC
-ccs811.drive_mode = adafruit_ccs811.DRIVE_MODE_1SEC
-# ccs811.drive_mode = adafruit_ccs811.DRIVE_MODE_250MS
-# ccs811.drive_mode = adafruit_ccs811.DRIVE_MODE_10SEC
 
 last_ccs811_co2 = 0
 last_ccs811_tvoc = 0
@@ -229,24 +242,40 @@ last_sgp30_tvoc = 0
 last_tsync = time.time() + 60
 last_pub = time.time() + 30
 last_pub_sgp = time.time() + 30
+last_reconnect = time.time()
+
 scd40_co2, scd40_temp, scd40_hum = None, None, None
 while True:
     t = time.time()
     temp = None
     humd = None
+
+    if t - last_reconnect > 60 * 10:
+        try_fnc(lambda: client.disconnect())
+        time.sleep(1)
+        try:
+            client.connect(MQTT_SERVER, MQTT_SERVER_PORT)
+            last_reconnect = t
+        except Exception as e:
+            print(f'MQTT connection error: {e}')
+
     try:
         cal_temp = scd40_temp
         cal_hum = scd40_hum
 
-        temp = try_fnc(lambda: aht21.temperature)
-        humd = try_fnc(lambda: aht21.relative_humidity)
+        temp = try_fnc(lambda: aht21.temperature) if HAS_AHT else None
+        humd = try_fnc(lambda: aht21.relative_humidity) if HAS_AHT else None
         if not cal_temp or not cal_hum:
             cal_temp = temp
             cal_hum = humd
 
         if cal_temp and cal_hum and time.time() - last_tsync > 180:
-            try_fnc(lambda: sgp30.set_iaq_relative_humidity(cal_temp, cal_hum))
-            try_fnc(lambda: ccs811.set_environmental_data(int(cal_hum), cal_temp))
+            if HAS_SGP30:
+                try_fnc(lambda: sgp30.set_iaq_relative_humidity(cal_temp, cal_hum))
+            if HAS_CCS811:
+                # try_fnc(lambda: ccs811.set_environmental_data(int(cal_hum), cal_temp))
+                pass
+
             last_tsync = time.time()
             print(f'Temp sync')
 
@@ -254,40 +283,42 @@ while True:
         print(f'E: exc in temp {e}')
 
     try:
-        sgp30.iaq_measure()
+        if HAS_SGP30:
+            sgp30.iaq_measure()
     except Exception as e:
         print(f'Exception measurement: {e}')
         time.sleep(1)
         continue
 
     ccs_co2, ccs_tvoc = 0, 0
-    try:
-        nccs_co2, nccs_tvoc = ccs811.read_data()
-        inv_ctr = 0
+    if HAS_CCS811:
+        try:
+            nccs_co2, nccs_tvoc = ccs811.read_data()
+            inv_ctr = 0
 
-        if nccs_co2 is not None and 400 < nccs_co2 < 30_000:
-            last_ccs811_co2 = ccs_co2 = nccs_co2
-            eavg_css811_co2.update(nccs_co2)
-        else:
-            inv_ctr += 1
+            if nccs_co2 is not None and 400 < nccs_co2 < 30_000:
+                last_ccs811_co2 = ccs_co2 = nccs_co2
+                eavg_css811_co2.update(nccs_co2)
+            else:
+                inv_ctr += 1
 
-        if nccs_tvoc is not None and 0 <= nccs_tvoc < 30_000:
-            last_ccs811_tvoc = ccs_tvoc = nccs_tvoc
-            eavg_css811_tvoc.update(nccs_tvoc)
-        else:
-            inv_ctr += 1
+            if nccs_tvoc is not None and 0 <= nccs_tvoc < 30_000:
+                last_ccs811_tvoc = ccs_tvoc = nccs_tvoc
+                eavg_css811_tvoc.update(nccs_tvoc)
+            else:
+                inv_ctr += 1
 
-        if inv_ctr or ccs811.r_overflow:
-            print(f'  CCS inv read, orig ({ccs811.r_orig_co2} {(nccs_co2 or 0)& ~0x8000}, {ccs811.r_orig_tvoc}), '
-                  f'status: {ccs811.r_status}, '
-                  f'error id: {ccs811.r_error_id} = [{ccs811.r_err_str}] [{ccs811.r_stat_str}], '
-                  f'raw I={ccs811.r_raw_current} uA, U={dval(ccs811.r_raw_adc):.5f} V, '
-                  f'Fw: {int(dval(ccs811.fw_mode))} Dm: {ccs811.drive_mode}')
+            if inv_ctr or ccs811.r_overflow:
+                print(f'  CCS inv read, orig ({ccs811.r_orig_co2} {(nccs_co2 or 0)& ~0x8000}, {ccs811.r_orig_tvoc}), '
+                      f'status: {ccs811.r_status}, '
+                      f'error id: {ccs811.r_error_id} = [{ccs811.r_err_str}] [{ccs811.r_stat_str}], '
+                      f'raw I={ccs811.r_raw_current} uA, U={dval(ccs811.r_raw_adc):.5f} V, '
+                      f'Fw: {int(dval(ccs811.fw_mode))} Dm: {ccs811.drive_mode}')
 
-        if ccs811.error:
-            print(f'Err: {ccs811.r_error} = {CCS811Custom.err_to_str(ccs811.r_error)}')
-    except Exception as e:
-        print(f'CCS error: {e}')
+            if ccs811.error:
+                print(f'Err: {ccs811.r_error} = {CCS811Custom.err_to_str(ccs811.r_error)}')
+        except Exception as e:
+            print(f'CCS error: {e}')
 
     try:
         valid_cnt = 0
@@ -301,7 +332,7 @@ while True:
             last_sgp30_tvoc = tvoc
             eavg_sgp30_tvoc.update(tvoc)
 
-        if last_ccs811_co2:
+        if HAS_CCS811 and last_ccs811_co2:
             valid_cnt += 1
 
         co2eq = eavg.update((last_sgp30_co2 + last_ccs811_co2) / valid_cnt) if valid_cnt else 0.0
@@ -309,11 +340,11 @@ while True:
         print(f'SGP30 err: {e}')
         continue
 
-    if scd4x.data_ready:
-        try:
+    try:
+        if HAS_SCD4X and scd4x.data_ready:
             scd40_co2, scd40_temp, scd40_hum = scd4x.CO2, scd4x.temperature, scd4x.relative_humidity
-        except Exception as e:
-            print(f'Err SDC40: {e}')
+    except Exception as e:
+        print(f'Err SDC40: {e}')
 
     print(
         f"CO2eq: {dval(co2eq):4.1f} (r={dval(co2eq_1):4d}) ppm, TVOC: {dval(tvoc):4d} ppb, "
@@ -325,28 +356,30 @@ while True:
 
     if t - last_pub > 60:
         try:
-            print(client.publish("sensors/sgp30_office", json.dumps(
-                {'eCO2': co2eq, 'TVOC': tvoc, 'Eth': eth, 'H2': h2, 'temp': temp, 'humidity': humd})))
+            if HAS_SGP30:
+                print(client.publish(f"sensors/sgp30{MQTT_SENSOR_SUFFIX}", json.dumps(
+                    {'eCO2': co2eq, 'TVOC': tvoc, 'Eth': eth, 'H2': h2, 'temp': temp, 'humidity': humd})))
 
-            print(client.publish("sensors/sgp30_raw_office", json.dumps(
-                {'eCO2': last_sgp30_co2, 'TVOC': last_sgp30_tvoc})))
+                print(client.publish(f"sensors/sgp30_raw{MQTT_SENSOR_SUFFIX}", json.dumps(
+                    {'eCO2': last_sgp30_co2, 'TVOC': last_sgp30_tvoc})))
 
-            print(client.publish("sensors/sgp30_filt_office", json.dumps(
-                {'eCO2': eavg_sgp30_co2.cur, 'TVOC': eavg_sgp30_tvoc.cur})))
+                print(client.publish(f"sensors/sgp30_filt{MQTT_SENSOR_SUFFIX}", json.dumps(
+                    {'eCO2': eavg_sgp30_co2.cur, 'TVOC': eavg_sgp30_tvoc.cur})))
 
-            print(client.publish("sensors/ccs811_raw_office", json.dumps(
-                {'eCO2': last_ccs811_co2, 'TVOC': last_ccs811_tvoc})))
+            if HAS_CCS811:
+                print(client.publish(f"sensors/ccs811_raw{MQTT_SENSOR_SUFFIX}", json.dumps(
+                    {'eCO2': last_ccs811_co2, 'TVOC': last_ccs811_tvoc})))
 
-            print(client.publish("sensors/ccs811_filt_office", json.dumps(
-                {'eCO2': eavg_css811_co2.cur, 'TVOC': eavg_css811_tvoc.cur})))
+                print(client.publish(f"sensors/ccs811_filt{MQTT_SENSOR_SUFFIX}", json.dumps(
+                    {'eCO2': eavg_css811_co2.cur, 'TVOC': eavg_css811_tvoc.cur})))
 
             last_pub = t
         except Exception as e:
             print(f'Error in pub: {e}')
 
-    if t - last_pub_sgp > 60 and scd40_co2 is not None and scd40_co2 > 0:
+    if HAS_SCD4X and t - last_pub_sgp > 60 and scd40_co2 is not None and scd40_co2 > 0:
         try:
-            print(client.publish("sensors/scd40_office", json.dumps(
+            print(client.publish(f"sensors/scd40{MQTT_SENSOR_SUFFIX}", json.dumps(
                 {'eCO2': scd40_co2, 'temp': scd40_temp, 'humidity': scd40_hum})))
 
             last_pub_sgp = t
