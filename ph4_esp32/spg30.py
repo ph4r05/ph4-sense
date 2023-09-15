@@ -108,9 +108,7 @@ class SGP30:
     :param boolean iaq_init: (optional) Whether to initialise SGP30 algorithm / baseline.
     """
 
-    def __init__(
-        self, i2c, addr=SGP30_DEFAULT_I2C_ADDR, measure_test=False, iaq_init=True
-    ):
+    def __init__(self, i2c, addr=SGP30_DEFAULT_I2C_ADDR, measure_test=False, iaq_init=True):
         """Initialises the sensor and display stats"""
         self._i2c = i2c
         if addr not in self._i2c.scan():
@@ -140,9 +138,7 @@ class SGP30:
 
     def iaq_init(self):
         """Initialises the IAQ algorithm"""
-        self._i2c_read_words_from_cmd(
-            SGP30_CMD_IAQ_INIT_HEX, SGP30_CMD_IAQ_INIT_MAX_MS, SGP30_CMD_IAQ_INIT_WORDS
-        )
+        self._i2c_read_words_from_cmd(SGP30_CMD_IAQ_INIT_HEX, SGP30_CMD_IAQ_INIT_MAX_MS, SGP30_CMD_IAQ_INIT_WORDS)
 
     def measure_iaq(self):
         """Measures the CO2eq and TVOC"""
@@ -194,9 +190,7 @@ class SGP30:
         The absolute humidity is calculated from the temperature (Celsius)
         and relative humidity (as a percentage).
         """
-        numerator = ((relative_humidity / 100) * 6.112) * exp(
-            (17.62 * celsius) / (243.12 + celsius)
-        )
+        numerator = ((relative_humidity / 100) * 6.112) * exp((17.62 * celsius) / (243.12 + celsius))
         denominator = 273.15 + celsius
 
         humidity_grams_pm3 = int(216.7 * (numerator / denominator))
@@ -245,19 +239,25 @@ class SGP30:
         return self.measure_iaq()[0]
 
     @property
+    def tvoc(self):
+        """Total Volatile Organic Compound in parts per billion (ppb)"""
+        return self.measure_iaq()[1]
+
+    def co2eq_tvoc(self):
+        return self.measure_iaq()
+
+    @property
     def baseline_co2eq(self):
         """Carbon Dioxide Equivalent baseline value"""
         return self.get_iaq_baseline()[0]
 
     @property
-    def tvoc(self):
-        """Total Volatile Organic Compound in parts per billion (ppb)"""
-        return self.measure_iaq()[1]
-
-    @property
     def baseline_tvoc(self):
         """Total Volatile Organic Compound baseline value"""
         return self.get_iaq_baseline()[1]
+
+    def baseline_co2eq_tvoc(self):
+        return self.get_iaq_baseline()
 
     @property
     def raw_h2(self):
@@ -268,6 +268,9 @@ class SGP30:
     def raw_ethanol(self):
         """Raw Ethanol signal"""
         return self.measure_raw()[1]
+
+    def raw_h2_ethanol(self):
+        return self.measure_raw()
 
     def _i2c_read_words_from_cmd(self, command, delay, reply_size):
         """Runs an SGP command query, gets a reply and CRC results if necessary"""
@@ -306,8 +309,7 @@ def convert_r_to_a_humidity(temp_c, r_humidity_perc, fixed_point=True):
     """Converts relative to absolute humidity as per the equation
     found in datasheet"""
     a_humidity_gm3 = 216.7 * (
-        (r_humidity_perc / 100 * 6.112 * exp(17.62 * temp_c / (243.12 + temp_c)))
-        / (273.15 + temp_c)
+        (r_humidity_perc / 100 * 6.112 * exp(17.62 * temp_c / (243.12 + temp_c))) / (273.15 + temp_c)
     )
     # Return in 8.8 bit fixed point format (for setting humidity compensation), if not
     # simply return the calculated value in g/m^3
