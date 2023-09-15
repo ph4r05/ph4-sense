@@ -44,7 +44,7 @@ except ImportError:
 __version__ = "1.3.13"
 __repo__ = "https://github.com/adafruit/Adafruit_CircuitPython_CCS811.git"
 
-
+_SLEEP_MS_CONST = const(12)
 _ALG_RESULT_DATA = const(0x02)
 _RAW_DATA = const(0x03)
 _ENV_DATA = const(0x05)
@@ -103,10 +103,10 @@ class RWBit:
         self.bit_mask = 1 << (bit % 8)  # the bitmask *within* the byte!
         self.buffer = bytearray(register_width)
         self.wbuffer = bytearray([register_address])
-        # if lsb_first:
-        #     self.byte = bit // 8 + 1  # the byte number within the buffer
-        # else:
-        #     self.byte = register_width - (bit // 8)  # the byte number within the buffer
+        if lsb_first:
+            self.byte = bit // 8  # the byte number within the buffer
+        else:
+            self.byte = register_width - (bit // 8)  # the byte number within the buffer
 
     def __get__(self) -> bool:
         return self.get()
@@ -114,9 +114,10 @@ class RWBit:
     def get(self) -> bool:
         # self.i2c_bus.writeto_then_readfrom(self.address, self.buffer, self.buffer, out_end=1, in_start=1)
         self.i2c_bus.writeto(self.address, self.wbuffer)
+        sleep_ms(_SLEEP_MS_CONST)
         self.i2c_bus.readfrom_into(self.address, self.buffer)
 
-        return bool(self.buffer[0] & self.bit_mask)
+        return bool(self.buffer[self.byte] & self.bit_mask)
 
     def __set__(self, value: bool) -> None:
         return self.set(value)
@@ -124,12 +125,13 @@ class RWBit:
     def set(self, value: bool) -> None:
         # self.i2c_bus.writeto_then_readfrom(self.address, self.buffer, self.buffer, out_end=1, in_start=1)
         self.i2c_bus.writeto(self.address, self.wbuffer)
+        sleep_ms(_SLEEP_MS_CONST)
         self.i2c_bus.readfrom_into(self.address, self.buffer)
 
         if value:
-            self.buffer[0] |= self.bit_mask
+            self.buffer[self.byte] |= self.bit_mask
         else:
-            self.buffer[0] &= ~self.bit_mask
+            self.buffer[self.byte] &= ~self.bit_mask
 
         self.i2c_bus.writeto(self.address, self.buffer)
 
@@ -194,7 +196,9 @@ class RWBits:
     def get(self) -> int:
         # self.i2c_bus.writeto_then_readfrom(self.address, self.buffer, self.buffer, out_end=1, in_start=1)
         self.i2c_bus.writeto(self.address, self.wbuffer)
+        sleep_ms(_SLEEP_MS_CONST)
         self.i2c_bus.readfrom_into(self.address, self.buffer)
+        print("rbuff", self.buffer)
 
         # read the number of bytes into a single variable
         reg = 0
@@ -216,6 +220,7 @@ class RWBits:
         value <<= self.lowest_bit  # shift the value over to the right spot
         # self.i2c_bus.writeto_then_readfrom(self.address, self.buffer, self.buffer, out_end=1, in_start=1)
         self.i2c_bus.writeto(self.address, self.wbuffer)
+        sleep_ms(_SLEEP_MS_CONST)
         self.i2c_bus.readfrom_into(self.address, self.buffer)
 
         reg = 0
@@ -224,13 +229,15 @@ class RWBits:
             order = range(1, len(self.buffer))
         for i in order:
             reg = (reg << 8) | self.buffer[i]
-        # print("old reg: ", hex(reg))
+        print("bitmask: ", hex(self.bit_mask))
+        print("old reg: ", hex(reg))
         reg &= ~self.bit_mask  # mask off the bits we're about to change
         reg |= value  # then or in our new value
-        # print("new reg: ", hex(reg))
+        print("new reg: ", hex(reg))
         for i in reversed(order):
             self.buffer[i] = reg & 0xFF
             reg >>= 8
+        print(self.buffer)
         self.i2c_bus.writeto(self.address, self.buffer)
 
     def __set__(self, value: int) -> None:
@@ -294,12 +301,8 @@ class CCS811:
         self.address = address
 
         # set up the registers
-        self.error = ROBit(
-            i2c_bus, address, 0x00, 0
-        )  # True when an error has occurred.
-        self.data_ready = ROBit(
-            i2c_bus, address, 0x00, 3
-        )  # True when new data has been read.
+        self.error = ROBit(i2c_bus, address, 0x00, 0)  # True when an error has occurred.
+        self.data_ready = ROBit(i2c_bus, address, 0x00, 3)  # True when new data has been read.
         self.app_valid = ROBit(i2c_bus, address, 0x00, 4)
         self.fw_mode = ROBit(i2c_bus, address, 0x00, 7)
         self.hw_id = ROBits(i2c_bus, address, 8, 0x20, 0)
@@ -314,14 +317,12 @@ class CCS811:
         hwid = self.hw_id.get()
         if hwid != _HW_ID_CODE:
             raise RuntimeError(
-                "Device ID returned is not correct! Please check your wiring. {} vs {}".format(
-                    hwid, _HW_ID_CODE
-                )
+                "Device ID returned is not correct! Please check your wiring. {} vs {}".format(hwid, _HW_ID_CODE)
             )
         # try to start the app
         self.cmd_buf[0] = 0xF4
         self.i2c_bus.writeto(self.address, self.cmd_buf)
-        sleep_ms(50)
+        sleep_ms(150)
 
         # make sure there are no errors and we have entered application mode
         err = self.error.get()
@@ -338,11 +339,28 @@ class CCS811:
                 "be a problem with the firmware on your sensor. {}".format(fw_mode)
             )
 
-        print("Initially looks ok")
+        print("Initially looks ok, fw_mode", fw_mode, ", err mode", err)
         self.interrupt_enabled.set(False)
+        sleep_ms(_SLEEP_MS_CONST)
 
         # default to read every second
-        self.drive_mode.set(DRIVE_MODE_1SEC)
+        self.drive_mode.set(DRIVE_MODE_250MS)
+        sleep_ms(_SLEEP_MS_CONST)
+
+        print("Drive mode", self.drive_mode.get())
+        sleep_ms(_SLEEP_MS_CONST)
+        print("Drive mode", self.drive_mode.get())
+        sleep_ms(_SLEEP_MS_CONST)
+        print("interrupt_enabled", self.interrupt_enabled.get())
+        sleep_ms(_SLEEP_MS_CONST)
+        print("app_valid", self.app_valid.get())
+        sleep_ms(_SLEEP_MS_CONST)
+        print("data_ready", self.data_ready.get())
+        sleep_ms(_SLEEP_MS_CONST)
+        err = self.error.get()
+        if err:
+            r_error = self.error_code
+            print("err", CCS811Custom.err_to_str(r_error))
 
         self._eco2 = None  # pylint: disable=invalid-name
         self._tvoc = None  # pylint: disable=invalid-name
@@ -360,14 +378,14 @@ class CCS811:
     @property
     def error_code(self) -> int:
         """Error code"""
-        return self._i2c_read_words_from_cmd(0xE0, 20, self.cmd_buf)[0]
+        return self._i2c_read_words_from_cmd(0xE0, _SLEEP_MS_CONST, self.cmd_buf)[0]
 
     def _update_data(self) -> None:
         if self.data_ready.get():
-            buf = self._i2c_read_words_from_cmd(_ALG_RESULT_DATA, 20, self.resp_buf8)
+            buf = self._i2c_read_words_from_cmd(_ALG_RESULT_DATA, _SLEEP_MS_CONST, self.resp_buf8)
 
-            self._eco2 = (buf[1] << 8) | (buf[2])
-            self._tvoc = (buf[3] << 8) | (buf[4])
+            self._eco2 = (buf[0] << 8) | (buf[1])
+            self._tvoc = (buf[2] << 8) | (buf[3])
 
             if self.error.get():
                 raise RuntimeError("Error:" + str(self.error_code))
@@ -414,8 +432,8 @@ class CCS811:
 
         Temperature based on optional thermistor in Celsius."""
         buf = self._i2c_read_words_from_cmd(_NTC, 20, bytearray(4))
-        vref = (buf[1] << 8) | buf[2]
-        vntc = (buf[3] << 8) | buf[4]
+        vref = (buf[0] << 8) | buf[1]
+        vntc = (buf[2] << 8) | buf[3]
 
         # From ams ccs811 app note 000925
         # https://download.ams.com/content/download/9059/13027/version/1/file/CCS811_Doc_cAppNote-Connecting-NTC-Thermistor_AN000372_v1..pdf
@@ -449,9 +467,7 @@ class CCS811:
 
         self.i2c_bus.writeto(self.address, buf)
 
-    def set_interrupt_thresholds(
-        self, low_med: int, med_high: int, hysteresis: int
-    ) -> None:
+    def set_interrupt_thresholds(self, low_med: int, med_high: int, hysteresis: int) -> None:
         """Set the thresholds used for triggering the interrupt based on eCO2.
         The interrupt is triggered when the value crossed a boundary value by the
         minimum hysteresis value.
@@ -533,13 +549,13 @@ class CCS811Custom(CCS811):
             buf = self._i2c_read_words_from_cmd(_ALG_RESULT_DATA, 20, self.resp_buf8)
 
             # https://cdn.sparkfun.com/assets/2/c/c/6/5/CN04-2019_attachment_CCS811_Datasheet_v1-06.pdf
-            self.r_orig_co2 = self._eco2 = (buf[1] << 8) | (buf[2])  # & ~0x8000
-            self.r_orig_tvoc = self._tvoc = (buf[3] << 8) | (buf[4])  # & ~0x8000
-            self.r_status = buf[5]
-            self.r_error_id = buf[6]
-            self.r_raw_data = buf[7:9]
-            self.r_raw_current = int((buf[7] & (~0x3)) >> 2)
-            self.r_raw_adc = (1.65 / 1023) * (int(buf[7] & 0x3) << 8 | int(buf[8]))
+            self.r_orig_co2 = self._eco2 = (buf[0] << 8) | (buf[1])  # & ~0x8000
+            self.r_orig_tvoc = self._tvoc = (buf[2] << 8) | (buf[3])  # & ~0x8000
+            self.r_status = buf[4]
+            self.r_error_id = buf[5]
+            self.r_raw_data = buf[6:8]
+            self.r_raw_current = int((buf[6] & (~0x3)) >> 2)
+            self.r_raw_adc = (1.65 / 1023) * (int(buf[7] & 0x3) << 8 | int(buf[7]))
             self.r_err_str = CCS811Custom.err_to_str(self.r_error_id)
 
             if self._eco2 > CCS811Custom.MAX_CO2:

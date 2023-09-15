@@ -141,12 +141,10 @@ class AHTx0:
         self._buf[2] = 0x00
         self.i2c_bus.writeto(self.address, self._buf[:3])
         while self.status & AHTX0_STATUS_BUSY:
-            sleep_ms(10)
+            sleep_ms(12)
         self.i2c_bus.readfrom_into(self.address, self._buf)
 
-        self._humidity = (
-            (self._buf[1] << 12) | (self._buf[2] << 4) | (self._buf[3] >> 4)
-        )
+        self._humidity = (self._buf[1] << 12) | (self._buf[2] << 4) | (self._buf[3] >> 4)
         self._humidity = (self._humidity * 100) / 0x100000
         self._temp = ((self._buf[3] & 0xF) << 16) | (self._buf[4] << 8) | self._buf[5]
         self._temp = ((self._temp * 200.0) / 0x100000) - 50

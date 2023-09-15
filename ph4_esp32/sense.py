@@ -1,12 +1,15 @@
 import machine
-import time
+import utime
 import ujson as json
 from umqtt.robust import MQTTClient
+from utime import sleep_ms
 
 from athx0 import AHTx0
 from ccs811 import CCS811Custom
 from scd4x import SCD4X
 from spg30 import SGP30
+from utils import try_fnc, dval
+from filters import ExpAverage, SensorFilter
 
 # Set up your Wi-Fi connection details
 WIFI_SSID = None
@@ -57,12 +60,12 @@ def connect_wifi():
 
     if not sta_if.isconnected():
         print("Not connected, scanning...")
-        sta_if.scan()
+        print(sta_if.scan())
 
         print("Connecting to WiFi: " + WIFI_SSID)
         sta_if.connect(WIFI_SSID, WIFI_PASSWORD)
         while not sta_if.isconnected():
-            time.sleep(0.5)
+            sleep_ms(500)
     print("WiFi connected:", sta_if.ifconfig())
 
 
@@ -83,55 +86,339 @@ def connect_mqtt():
     return client
 
 
-# Main program loop
+class Sensei:
+    def __init__(self):
+        self.co2eq = 0
+        self.co2eq_1 = 0
+        self.tvoc = 0
+        self.eth = 0
+        self.h2 = 0
+        self.temp = 0
+        self.humd = 0
+        self.ccs_co2 = 0
+        self.ccs_tvoc = 0
+        self.eavg = ExpAverage(0.1)
+        self.eavg_css811_co2 = SensorFilter(median_window=7, alpha=0.2)
+        self.eavg_sgp30_co2 = SensorFilter(median_window=5, alpha=0.2)
+        self.eavg_css811_tvoc = SensorFilter(median_window=7, alpha=0.2)
+        self.eavg_sgp30_tvoc = SensorFilter(median_window=5, alpha=0.2)
+
+        self.last_ccs811_co2 = 0
+        self.last_ccs811_tvoc = 0
+        self.last_sgp30_co2 = 0
+        self.last_sgp30_tvoc = 0
+        self.last_tsync = 0
+        self.scd40_co2 = None
+        self.scd40_temp = None
+        self.scd40_hum = None
+
+        self.last_tsync = utime.time() + 60
+        self.last_pub = utime.time() + 30
+        self.last_pub_sgp = utime.time() + 30
+        self.last_reconnect = utime.time()
+
+        self.i2c = None
+        self.mqtt_client = None
+        self.sgp30 = None
+        self.aht21 = None
+        self.ccs811 = None
+        self.scd4x = None
+
+    def connect_sensors(self):
+        print("\nConnecting sensors")
+        try:
+            print(" - Connecting SGP30")
+            self.sgp30 = SGP30(self.i2c) if HAS_SGP30 else None
+            if HAS_SGP30:
+                self.sgp30.set_iaq_relative_humidity(21, 0.45)
+                self.sgp30.set_iaq_baseline(0x8973, 0x8AAE)
+                self.sgp30.iaq_init()
+
+            print("\n - Connecting AHT21")
+            self.aht21 = AHTx0(self.i2c) if HAS_AHT else None
+
+            print("\n - Connecting CCS811")
+            self.ccs811 = CCS811Custom(self.i2c) if HAS_CCS811 else None
+
+            print("\n - Connecting SCD40")
+            self.scd4x = SCD4X(self.i2c) if HAS_SCD4X else None
+            if HAS_SCD4X:
+                self.scd4x.start_periodic_measurement()
+
+            print("\n Sensors connected")
+        except Exception as e:
+            print("Exception in sensor init: ", e)
+            raise
+
+    def measure_temperature(self):
+        if not HAS_AHT:
+            return
+
+        try:
+            cal_temp = self.scd40_temp
+            cal_hum = self.scd40_hum
+
+            self.temp = try_fnc(lambda: self.aht21.temperature) if HAS_AHT else None
+            self.humd = try_fnc(lambda: self.aht21.relative_humidity) if HAS_AHT else None
+            if not cal_temp or not cal_hum:
+                cal_temp = self.temp
+                cal_hum = self.humd
+
+            if cal_temp and cal_hum and utime.time() - self.last_tsync > 180:
+                if HAS_SGP30:
+                    try_fnc(lambda: self.sgp30.set_iaq_relative_humidity(cal_temp, cal_hum))
+                if HAS_CCS811:
+                    # try_fnc(lambda: self.ccs811.set_environmental_data(int(cal_hum), cal_temp))
+                    pass
+
+                self.last_tsync = utime.time()
+                print("Temp sync", cal_temp, cal_hum)
+
+        except Exception as e:
+            print("E: exc in temp", e)
+
+    def measure_sqp30(self):
+        if not HAS_SGP30:
+            return
+
+        try:
+            self.sgp30.measure_iaq()
+        except Exception as e:
+            print("Exception measurement:", e)
+            sleep_ms(1000)
+
+    def measure_ccs811(self):
+        if not HAS_CCS811:
+            return
+
+        self.ccs_co2 = 0
+        self.ccs_tvoc = 0
+        try:
+            nccs_co2, nccs_tvoc = self.ccs811.read_data()
+            inv_ctr = 0
+
+            if nccs_co2 is not None and 400 < nccs_co2 < 30_000:
+                self.last_ccs811_co2 = self.ccs_co2 = nccs_co2
+                self.eavg_css811_co2.update(nccs_co2)
+            else:
+                inv_ctr += 1
+
+            if nccs_tvoc is not None and 0 <= nccs_tvoc < 30_000:
+                self.last_ccs811_tvoc = self.ccs_tvoc = nccs_tvoc
+                self.eavg_css811_tvoc.update(nccs_tvoc)
+            else:
+                inv_ctr += 1
+
+            if inv_ctr or self.ccs811.r_overflow:
+                flg = (nccs_co2 or 0) & ~0x8000
+                print(
+                    f"  CCS inv read {inv_ctr}, orig ({self.ccs811.r_orig_co2} {flg}, "
+                    + f"{self.ccs811.r_orig_tvoc}), "
+                    + f"status: {self.ccs811.r_status}, "
+                    + f"error id: {self.ccs811.r_error_id} = [{self.ccs811.r_err_str}] [{self.ccs811.r_stat_str}], "
+                    + f"raw I={self.ccs811.r_raw_current} uA, U={dval(self.ccs811.r_raw_adc):.5f} V, "
+                    + f"Fw: {int(dval(self.ccs811.fw_mode.get()))} Dm: {self.ccs811.drive_mode.get()}"
+                )
+
+            if self.ccs811.error.get():
+                print(f"Err: {self.ccs811.r_error} = {CCS811Custom.err_to_str(self.ccs811.r_error)}")
+        except Exception as e:
+            print(f"CCS error: ", e)
+            raise
+
+    def update_metrics(self):
+        try:
+            valid_cnt = 0
+            self.co2eq_1, self.tvoc = self.sgp30.co2eq_tvoc()
+            self.h2, self.eth = self.sgp30.raw_h2_ethanol()
+
+            if self.co2eq_1:
+                self.eavg_sgp30_co2.update(self.co2eq_1)
+                self.last_sgp30_co2 = self.co2eq_1
+                valid_cnt += 1
+
+            if self.tvoc:
+                self.last_sgp30_tvoc = self.tvoc
+                self.eavg_sgp30_tvoc.update(self.tvoc)
+
+            if HAS_CCS811 and self.last_ccs811_co2:
+                valid_cnt += 1
+
+            self.co2eq = (
+                self.eavg.update((self.last_sgp30_co2 + self.last_ccs811_co2) / valid_cnt) if valid_cnt else 0.0
+            )
+        except Exception as e:
+            print(f"SGP30 err:", e)
+            return
+
+    def measure_scd4x(self):
+        if not HAS_SCD4X:
+            return
+        try:
+            if self.scd4x.data_ready:
+                self.scd40_co2 = self.scd4x.CO2
+                self.scd40_temp = self.scd4x.temperature
+                self.scd40_hum = self.scd4x.relative_humidity
+        except Exception as e:
+            print(f"Err SDC40: ", e)
+
+    def publish(self):
+        t = utime.time()
+        if t - self.last_pub <= 60:
+            return
+
+        try:
+            self.maybe_reconnect_mqtt()
+            if HAS_SGP30:
+                print(
+                    self.mqtt_client.publish(
+                        f"sensors/sgp30{MQTT_SENSOR_SUFFIX}",
+                        json.dumps(
+                            {
+                                "eCO2": self.co2eq,
+                                "TVOC": self.tvoc,
+                                "Eth": self.eth,
+                                "H2": self.h2,
+                                "temp": self.temp,
+                                "humidity": self.humd,
+                            }
+                        ),
+                    )
+                )
+
+                print(
+                    self.mqtt_client.publish(
+                        f"sensors/sgp30_raw{MQTT_SENSOR_SUFFIX}",
+                        json.dumps({"eCO2": self.last_sgp30_co2, "TVOC": self.last_sgp30_tvoc}),
+                    )
+                )
+
+                print(
+                    self.mqtt_client.publish(
+                        f"sensors/sgp30_filt{MQTT_SENSOR_SUFFIX}",
+                        json.dumps(
+                            {
+                                "eCO2": self.eavg_sgp30_co2.cur,
+                                "TVOC": self.eavg_sgp30_tvoc.cur,
+                            }
+                        ),
+                    )
+                )
+
+            if HAS_CCS811:
+                print(
+                    self.mqtt_client.publish(
+                        f"sensors/ccs811_raw{MQTT_SENSOR_SUFFIX}",
+                        json.dumps(
+                            {
+                                "eCO2": self.last_ccs811_co2,
+                                "TVOC": self.last_ccs811_tvoc,
+                            }
+                        ),
+                    )
+                )
+
+                print(
+                    self.mqtt_client.publish(
+                        f"sensors/ccs811_filt{MQTT_SENSOR_SUFFIX}",
+                        json.dumps(
+                            {
+                                "eCO2": self.eavg_css811_co2.cur,
+                                "TVOC": self.eavg_css811_tvoc.cur,
+                            }
+                        ),
+                    )
+                )
+
+            self.last_pub = t
+        except Exception as e:
+            print(f"Error in pub:", e)
+
+        if HAS_SCD4X and t - self.last_pub_sgp > 60 and self.scd40_co2 is not None and self.scd40_co2 > 0:
+            try:
+                print(
+                    self.mqtt_client.publish(
+                        f"sensors/scd40{MQTT_SENSOR_SUFFIX}",
+                        json.dumps(
+                            {
+                                "eCO2": self.scd40_co2,
+                                "temp": self.scd40_temp,
+                                "humidity": self.scd40_hum,
+                            }
+                        ),
+                    )
+                )
+
+                self.last_pub_sgp = t
+            except Exception as e:
+                print(f"Error in pub:", e)
+
+    def maybe_reconnect_mqtt(self):
+        t = utime.time()
+        if t - self.last_reconnect < 60 * 3:
+            return
+
+        try_fnc(lambda: self.mqtt_client.disconnect())
+        sleep_ms(1000)
+
+        try:
+            self.mqtt_client = connect_mqtt()
+            self.last_reconnect = t
+        except Exception as e:
+            print(f"MQTT connection error:", e)
+
+    def main(self):
+        print("Starting bus")
+        self.i2c = machine.SoftI2C(scl=machine.Pin(SPG30_SCL_PIN), sda=machine.Pin(SPG30_SDA_PIN))
+        self.i2c.start()
+
+        print("Loading config")
+        load_config()
+
+        print("\nConnecting WiFi")
+        connect_wifi()
+
+        print("\nConnecting MQTT")
+        self.mqtt_client = connect_mqtt()
+
+        self.connect_sensors()
+        while True:
+            self.maybe_reconnect_mqtt()
+
+            # Measure temperature
+            self.measure_temperature()
+            self.measure_sqp30()
+            self.measure_ccs811()
+            self.measure_sqp30()
+            self.measure_scd4x()
+            self.update_metrics()
+
+            print(
+                f"CO2eq: {dval(self.co2eq):4.1f} (r={dval(self.co2eq_1):4d}) ppm, TVOC: {dval(self.tvoc):4d} ppb, "
+                + f"CCS CO2: {dval(self.ccs_co2):4d} ({dval(self.eavg_css811_co2.cur):4.1f}), "
+                + f"TVOC2: {dval(self.ccs_tvoc):3d} ({dval(self.eavg_css811_tvoc.cur):3.1f}), "
+                + f"Eth: {dval(self.eth):5d}, H2: {self.h2:5d}, {dval(self.temp):4.2f} C, {dval(self.humd):4.2f} %%, "
+                + f"SCD40: {dval(self.scd40_co2):4.2f}, {dval(self.scd40_temp):4.2f} C, {dval(self.scd40_hum):4.2f} %% "
+            )
+
+            self.publish()
+
+            # Read data from SPG30 sensor
+            # i2c.writeto(0x58, b'\x20\x03')
+            # time.sleep(0.5)
+            # data = i2c.readfrom(0x58, 6)
+            # tvoc = data[0] * 256 + data[1]
+            # Publish data to MQTT broker
+            # payload = json.dumps({"tvoc": 0})
+            # print(payload)
+            # print(self.mqtt_client.publish(MQTT_TOPIC, payload))
+            # Wait for some time before taking the next reading
+            sleep_ms(2_000)
+
+
 def main():
-    print("Starting bus")
-    i2c = machine.SoftI2C(
-        scl=machine.Pin(SPG30_SCL_PIN), sda=machine.Pin(SPG30_SDA_PIN)
-    )
-    i2c.start()
-
-    print("Loading config")
-    load_config()
-
-    print("\nConnecting WiFi")
-    #connect_wifi()
-
-    print("\nConnecting MQTT")
-    #mqtt_client = connect_mqtt()
-    mqtt_client = None
-
-    print("\nConnecting sensors")
-    try:
-        #print(" - Connecting SGP30")
-        #sgp30 = SGP30(i2c) if HAS_SGP30 else None
-
-        #print("\n - Connecting AHT21")
-        #aht21 = AHTx0(i2c) if HAS_AHT else None
-
-        print("\n - Connecting CCS811")
-        ccs811 = CCS811Custom(i2c) if HAS_CCS811 else None
-
-        print("\n - Connecting SCD40")
-        scd4x = SCD4X(i2c) if HAS_SCD4X else None
-
-        print("\n Sensors connected")
-    except Exception as e:
-        print("Excepion in sensor init: ", e)
-
-    return
-    while True:
-        # Read data from SPG30 sensor
-        # i2c.writeto(0x58, b'\x20\x03')
-        # time.sleep(0.5)
-        # data = i2c.readfrom(0x58, 6)
-        # tvoc = data[0] * 256 + data[1]
-        # Publish data to MQTT broker
-        payload = json.dumps({"tvoc": 0})
-        print(payload)
-        print(mqtt_client.publish(MQTT_TOPIC, payload))
-        # Wait for some time before taking the next reading
-        time.sleep(10)
+    sensei = Sensei()
+    sensei.main()
 
 
 # Run the main program
