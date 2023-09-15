@@ -250,7 +250,7 @@ while True:
     temp = None
     humd = None
 
-    if t - last_reconnect > 60 * 10:
+    if t - last_reconnect > 60 * 3:
         try_fnc(lambda: client.disconnect())
         time.sleep(1)
         try:

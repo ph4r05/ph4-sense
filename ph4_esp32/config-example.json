@@ -1,0 +1,10 @@
+{
+  "wifi": {
+    "ssid": "net",
+    "passphrase": "password"
+  },
+  "mqtt": {
+    "host": "192.168.0.1"
+  },
+  "udpLogger": "192.168.0.1:9998"
+}
