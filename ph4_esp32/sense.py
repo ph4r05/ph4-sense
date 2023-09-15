@@ -73,7 +73,7 @@ def connect_wifi():
 def connect_mqtt():
     # https://notebook.community/Wei1234c/Elastic_Network_of_Things_with_MQTT_and_MicroPython/notebooks/test/MQTT%20client%20test%20-%20MicroPython
     client = MQTTClient(
-        "esp32_client/gas",
+        "esp32_client/bed",
         MQTT_BROKER,
         MQTT_PORT,
         keepalive=60,
@@ -219,6 +219,7 @@ class Sensei:
                     + f"raw I={self.ccs811.r_raw_current} uA, U={dval(self.ccs811.r_raw_adc):.5f} V, "
                     + f"Fw: {int(dval(self.ccs811.fw_mode.get()))} Dm: {self.ccs811.drive_mode.get()}"
                 )
+                self.ccs811.drive_mode.set(1)
 
             if self.ccs811.error.get():
                 print(f"Err: {self.ccs811.r_error} = {CCS811Custom.err_to_str(self.ccs811.r_error)}")
@@ -261,6 +262,16 @@ class Sensei:
                 self.scd40_hum = self.scd4x.relative_humidity
         except Exception as e:
             print(f"Err SDC40: ", e)
+
+    def publish_booted(self):
+        self.mqtt_client.publish(
+            f"sensors/esp32{MQTT_SENSOR_SUFFIX}",
+            json.dumps(
+                {
+                    "booted": True,
+                }
+            ),
+        )
 
     def publish(self):
         t = utime.time()
@@ -382,6 +393,7 @@ class Sensei:
         self.mqtt_client = connect_mqtt()
 
         self.connect_sensors()
+        self.publish_booted()
         while True:
             self.maybe_reconnect_mqtt()
 

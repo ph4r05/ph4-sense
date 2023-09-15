@@ -11,3 +11,6 @@
 #     pycom.rgbled(0x0000FF)  # Blue
 #     time.sleep(1)
 print("Booted")
+
+import sense 
+sense.main()

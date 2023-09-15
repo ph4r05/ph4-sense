@@ -127,6 +127,7 @@ class RWBit:
         self.i2c_bus.writeto(self.address, self.wbuffer)
         sleep_ms(_SLEEP_MS_CONST)
         self.i2c_bus.readfrom_into(self.address, self.buffer)
+        sleep_ms(_SLEEP_MS_CONST)
 
         if value:
             self.buffer[self.byte] |= self.bit_mask
@@ -222,6 +223,7 @@ class RWBits:
         self.i2c_bus.writeto(self.address, self.wbuffer)
         sleep_ms(_SLEEP_MS_CONST)
         self.i2c_bus.readfrom_into(self.address, self.buffer)
+        sleep_ms(_SLEEP_MS_CONST)
 
         reg = 0
         order = range(len(self.buffer) - 1, -1, -1)
@@ -319,14 +321,16 @@ class CCS811:
             raise RuntimeError(
                 "Device ID returned is not correct! Please check your wiring. {} vs {}".format(hwid, _HW_ID_CODE)
             )
+
         # try to start the app
-        self.cmd_buf[0] = 0xF4
-        self.i2c_bus.writeto(self.address, self.cmd_buf)
-        sleep_ms(150)
+        self._i2c_read_words_from_cmd(0xF4, 150, None)
+        print(self.cmd_buf)
 
         # make sure there are no errors and we have entered application mode
         err = self.error.get()
         if err:
+            r_error = self.error_code
+            print("err", err, r_error, CCS811Custom.err_to_str(r_error))
             raise RuntimeError(
                 "Device returned an error! Try removing and reapplying power to "
                 "the device and running the code again. Err: {}".format(err)
@@ -349,6 +353,13 @@ class CCS811:
 
         print("Drive mode", self.drive_mode.get())
         sleep_ms(_SLEEP_MS_CONST)
+        self.drive_mode.set(DRIVE_MODE_1SEC)
+        sleep_ms(_SLEEP_MS_CONST)
+
+        err = self.error.get()
+        r_error = self.error_code
+        print("err", err, r_error, CCS811Custom.err_to_str(r_error))
+
         print("Drive mode", self.drive_mode.get())
         sleep_ms(_SLEEP_MS_CONST)
         print("interrupt_enabled", self.interrupt_enabled.get())
@@ -357,16 +368,17 @@ class CCS811:
         sleep_ms(_SLEEP_MS_CONST)
         print("data_ready", self.data_ready.get())
         sleep_ms(_SLEEP_MS_CONST)
+
         err = self.error.get()
-        if err:
-            r_error = self.error_code
-            print("err", CCS811Custom.err_to_str(r_error))
+        r_error = self.error_code
+        print("err", err, r_error, CCS811Custom.err_to_str(r_error))
 
         self._eco2 = None  # pylint: disable=invalid-name
         self._tvoc = None  # pylint: disable=invalid-name
 
     def _i2c_read_words_from_cmd(self, command, delay, response_buffer):
-        self.cmd_buf = command
+        self.cmd_buf[0] = command
+        print(self.cmd_buf)
         self.i2c_bus.writeto(self.address, self.cmd_buf)
         sleep_ms(delay)
         if not response_buffer:
