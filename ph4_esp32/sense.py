@@ -11,17 +11,6 @@ from spg30 import SGP30
 from utils import try_fnc, dval
 from filters import ExpAverage, SensorFilter
 
-# Set up your Wi-Fi connection details
-WIFI_SSID = None
-WIFI_PASSWORD = None
-
-# Set up your MQTT broker details
-MQTT_BROKER = "localhost"
-MQTT_PORT = 1883
-MQTT_SENSOR_SUFFIX = "_bed"
-MQTT_TOPIC_SUB = "sensors/esp32_bed_sub"
-MQTT_TOPIC = "sensors/esp32_bed_gas"
-
 HAS_AHT = True
 HAS_SGP30 = True
 HAS_CCS811 = True
@@ -33,61 +22,17 @@ SPG30_SCL_PIN = 22
 SPG30_SDA_PIN = 21
 
 
-def load_config():
-    global WIFI_SSID, WIFI_PASSWORD, MQTT_BROKER
-    with open("config.json") as fh:
-        js = json.load(fh)
-
-    WIFI_SSID = js["wifi"]["ssid"]
-    WIFI_PASSWORD = js["wifi"]["passphrase"]
-    MQTT_BROKER = js["mqtt"]["host"]
-
-
-# Define the MQTT callback function
-def mqtt_callback(topic, msg):
-    print("Received MQTT message:", topic, msg)
-
-
-# Connect to Wi-Fi
-def connect_wifi():
-    import network
-
-    sta_if = network.WLAN(network.STA_IF)
-    sta_if.active(True)
-
-    if not WIFI_SSID:
-        raise ValueError("WiFi is not configured")
-
-    if not sta_if.isconnected():
-        print("Not connected, scanning...")
-        print(sta_if.scan())
-
-        print("Connecting to WiFi: " + WIFI_SSID)
-        sta_if.connect(WIFI_SSID, WIFI_PASSWORD)
-        while not sta_if.isconnected():
-            sleep_ms(500)
-    print("WiFi connected:", sta_if.ifconfig())
-
-
-# Connect to MQTT broker
-def connect_mqtt():
-    # https://notebook.community/Wei1234c/Elastic_Network_of_Things_with_MQTT_and_MicroPython/notebooks/test/MQTT%20client%20test%20-%20MicroPython
-    client = MQTTClient(
-        "esp32_client/bed",
-        MQTT_BROKER,
-        MQTT_PORT,
-        keepalive=60,
-        ssl=False,
-        ssl_params={},
-    )
-    client.set_callback(mqtt_callback)
-    client.connect()
-    client.subscribe(MQTT_TOPIC_SUB)
-    return client
-
-
 class Sensei:
     def __init__(self):
+        self.wifi_ssid = None
+        self.wifi_passphrase = None
+        self.mqtt_broker = None
+        self.mqtt_port = 1883
+        self.mqtt_sensor_id = "bed"
+        self.mqtt_sensor_suffix = f"_{self.mqtt_sensor_id}"
+        self.mqtt_topic_sub = f"sensors/esp32_{self.mqtt_sensor_id}_sub"
+        self.mqtt_topic = f"sensors/esp32_{self.mqtt_sensor_id}_gas"
+
         self.co2eq = 0
         self.co2eq_1 = 0
         self.tvoc = 0
@@ -118,11 +63,62 @@ class Sensei:
         self.last_reconnect = utime.time()
 
         self.i2c = None
+        self.sta_if = None
         self.mqtt_client = None
         self.sgp30 = None
         self.aht21 = None
         self.ccs811 = None
         self.scd4x = None
+
+    def load_config(self):
+        with open("config.json") as fh:
+            js = json.load(fh)
+
+        self.wifi_ssid = js["wifi"]["ssid"]
+        self.wifi_passphrase = js["wifi"]["passphrase"]
+        self.mqtt_broker = js["mqtt"]["host"]
+
+    def mqtt_callback(self, topic, msg):
+        print("Received MQTT message:", topic, msg)
+
+    def connect_wifi(self):
+        import network
+
+        if not self.sta_if:
+            self.sta_if = network.WLAN(network.STA_IF)
+            self.sta_if.active(True)
+
+        if not self.wifi_ssid:
+            raise ValueError("WiFi is not configured")
+
+        if not self.sta_if.isconnected():
+            print("Not connected, scanning...")
+            scan_res = self.sta_if.scan()
+            if scan_res:
+                for net in scan_res:
+                    print(f" - ", net)
+
+            print("Connecting to WiFi: " + self.wifi_ssid)
+            self.sta_if.connect(self.wifi_ssid, self.wifi_passphrase)
+            while not self.sta_if.isconnected():
+                sleep_ms(500)
+
+        print("WiFi connected:", self.sta_if.ifconfig())
+
+    def connect_mqtt(self):
+        # https://notebook.community/Wei1234c/Elastic_Network_of_Things_with_MQTT_and_MicroPython/notebooks/test/MQTT%20client%20test%20-%20MicroPython
+        client = MQTTClient(
+            f"esp32_client/{self.mqtt_sensor_id}",
+            self.mqtt_broker,
+            self.mqtt_port,
+            keepalive=60,
+            ssl=False,
+            ssl_params={},
+        )
+        client.set_callback(self.mqtt_callback)
+        client.connect()
+        client.subscribe(self.mqtt_topic_sub)
+        return client
 
     def connect_sensors(self):
         print("\nConnecting sensors")
@@ -219,7 +215,6 @@ class Sensei:
                     + f"raw I={self.ccs811.r_raw_current} uA, U={dval(self.ccs811.r_raw_adc):.5f} V, "
                     + f"Fw: {int(dval(self.ccs811.fw_mode.get()))} Dm: {self.ccs811.drive_mode.get()}"
                 )
-                self.ccs811.drive_mode.set(1)
 
             if self.ccs811.error.get():
                 print(f"Err: {self.ccs811.r_error} = {CCS811Custom.err_to_str(self.ccs811.r_error)}")
@@ -265,7 +260,7 @@ class Sensei:
 
     def publish_booted(self):
         self.mqtt_client.publish(
-            f"sensors/esp32{MQTT_SENSOR_SUFFIX}",
+            f"sensors/esp32{self.mqtt_sensor_suffix}",
             json.dumps(
                 {
                     "booted": True,
@@ -283,7 +278,7 @@ class Sensei:
             if HAS_SGP30:
                 print(
                     self.mqtt_client.publish(
-                        f"sensors/sgp30{MQTT_SENSOR_SUFFIX}",
+                        f"sensors/sgp30{self.mqtt_sensor_suffix}",
                         json.dumps(
                             {
                                 "eCO2": self.co2eq,
@@ -299,14 +294,14 @@ class Sensei:
 
                 print(
                     self.mqtt_client.publish(
-                        f"sensors/sgp30_raw{MQTT_SENSOR_SUFFIX}",
+                        f"sensors/sgp30_raw{self.mqtt_sensor_suffix}",
                         json.dumps({"eCO2": self.last_sgp30_co2, "TVOC": self.last_sgp30_tvoc}),
                     )
                 )
 
                 print(
                     self.mqtt_client.publish(
-                        f"sensors/sgp30_filt{MQTT_SENSOR_SUFFIX}",
+                        f"sensors/sgp30_filt{self.mqtt_sensor_suffix}",
                         json.dumps(
                             {
                                 "eCO2": self.eavg_sgp30_co2.cur,
@@ -319,7 +314,7 @@ class Sensei:
             if HAS_CCS811:
                 print(
                     self.mqtt_client.publish(
-                        f"sensors/ccs811_raw{MQTT_SENSOR_SUFFIX}",
+                        f"sensors/ccs811_raw{self.mqtt_sensor_suffix}",
                         json.dumps(
                             {
                                 "eCO2": self.last_ccs811_co2,
@@ -331,7 +326,7 @@ class Sensei:
 
                 print(
                     self.mqtt_client.publish(
-                        f"sensors/ccs811_filt{MQTT_SENSOR_SUFFIX}",
+                        f"sensors/ccs811_filt{self.mqtt_sensor_suffix}",
                         json.dumps(
                             {
                                 "eCO2": self.eavg_css811_co2.cur,
@@ -349,7 +344,7 @@ class Sensei:
             try:
                 print(
                     self.mqtt_client.publish(
-                        f"sensors/scd40{MQTT_SENSOR_SUFFIX}",
+                        f"sensors/scd40{self.mqtt_sensor_suffix}",
                         json.dumps(
                             {
                                 "eCO2": self.scd40_co2,
@@ -366,14 +361,15 @@ class Sensei:
 
     def maybe_reconnect_mqtt(self):
         t = utime.time()
-        if t - self.last_reconnect < 60 * 3:
+        if self.mqtt_client is not None and t - self.last_reconnect < 60 * 3:
             return
 
-        try_fnc(lambda: self.mqtt_client.disconnect())
-        sleep_ms(1000)
+        if self.mqtt_client:
+            try_fnc(lambda: self.mqtt_client.disconnect())
+            sleep_ms(1000)
 
         try:
-            self.mqtt_client = connect_mqtt()
+            self.mqtt_client = self.connect_mqtt()
             self.last_reconnect = t
         except Exception as e:
             print(f"MQTT connection error:", e)
@@ -384,13 +380,13 @@ class Sensei:
         self.i2c.start()
 
         print("Loading config")
-        load_config()
+        self.load_config()
 
         print("\nConnecting WiFi")
-        connect_wifi()
+        self.connect_wifi()
 
         print("\nConnecting MQTT")
-        self.mqtt_client = connect_mqtt()
+        self.maybe_reconnect_mqtt()
 
         self.connect_sensors()
         self.publish_booted()
@@ -414,17 +410,6 @@ class Sensei:
             )
 
             self.publish()
-
-            # Read data from SPG30 sensor
-            # i2c.writeto(0x58, b'\x20\x03')
-            # time.sleep(0.5)
-            # data = i2c.readfrom(0x58, 6)
-            # tvoc = data[0] * 256 + data[1]
-            # Publish data to MQTT broker
-            # payload = json.dumps({"tvoc": 0})
-            # print(payload)
-            # print(self.mqtt_client.publish(MQTT_TOPIC, payload))
-            # Wait for some time before taking the next reading
             sleep_ms(2_000)
 
 
