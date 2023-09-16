@@ -76,65 +76,70 @@ _HW_ID_CODE = const(0x81)
 _REF_RESISTOR = const(100000)
 
 
+class BitRegister:
+    def __init__(self, i2c_bus: I2C, address: int, register_address: int, register_width: int = 1):
+        self.i2c_bus = i2c_bus
+        self.address = address
+        self.register_width = register_width
+        self.buffer = bytearray(register_width)
+        self.cmd_buffer = bytearray([register_address])
+
+    def read(self) -> bytearray:
+        self.i2c_bus.writeto(self.address, self.cmd_buffer)
+        sleep_ms(_SLEEP_MS_CONST)
+        self.i2c_bus.readfrom_into(self.address, self.buffer)
+        return self.buffer
+
+    def write(self, reg=None):
+        if reg is not None and reg != self.buffer:
+            assert len(reg) == len(self.buffer)
+            for i in range(reg):
+                self.buffer[0] = reg[0]
+
+        self.i2c_bus.writeto(self.address, self.cmd_buffer + self.buffer)
+
+
 class RWBit:
     """
     Single bit register that is readable and writeable.
 
     Values are `bool`
 
-    :param int register_address: The register address to read the bit from
+    :param BitRegister register: Bit register that contains this particular bit
     :param int bit: The bit index within the byte at ``register_address``
-    :param int register_width: The number of bytes in the register. Defaults to 1.
     :param bool lsb_first: Is the first byte we read from I2C the LSB? Defaults to true
     """
 
     def __init__(
         self,
-        i2c_bus: I2C,
-        address: int,
-        register_address: int,
+        register: BitRegister,
         bit: int,
-        register_width: int = 1,
         lsb_first: bool = True,
     ) -> None:
-        self.i2c_bus = i2c_bus
-        self.address = address
-
+        self.register = register
         self.bit_mask = 1 << (bit % 8)  # the bitmask *within* the byte!
-        self.buffer = bytearray(register_width)
-        self.cmd_buffer = bytearray([register_address])
         if lsb_first:
             self.byte = bit // 8  # the byte number within the buffer
         else:
-            self.byte = register_width - (bit // 8)  # the byte number within the buffer
+            self.byte = register.register_width - (bit // 8)  # the byte number within the buffer
 
     def __get__(self) -> bool:
         return self.get()
 
     def get(self) -> bool:
-        # self.i2c_bus.writeto_then_readfrom(self.address, self.buffer, self.buffer, out_end=1, in_start=1)
-        self.i2c_bus.writeto(self.address, self.cmd_buffer)
-        sleep_ms(_SLEEP_MS_CONST)
-        self.i2c_bus.readfrom_into(self.address, self.buffer)
-
-        return bool(self.buffer[self.byte] & self.bit_mask)
+        buf = self.register.read()
+        return bool(buf[self.byte] & self.bit_mask)
 
     def __set__(self, value: bool) -> None:
         return self.set(value)
 
     def set(self, value: bool) -> None:
-        # self.i2c_bus.writeto_then_readfrom(self.address, self.buffer, self.buffer, out_end=1, in_start=1)
-        self.i2c_bus.writeto(self.address, self.cmd_buffer)
-        sleep_ms(_SLEEP_MS_CONST)
-        self.i2c_bus.readfrom_into(self.address, self.buffer)
-        sleep_ms(_SLEEP_MS_CONST)
-
+        buf = self.register.read()
         if value:
-            self.buffer[self.byte] |= self.bit_mask
+            buf[self.byte] |= self.bit_mask
         else:
-            self.buffer[self.byte] &= ~self.bit_mask
-
-        self.i2c_bus.writeto(self.address, self.cmd_buffer + self.buffer)
+            buf[self.byte] &= ~self.bit_mask
+        self.register.write(buf)
 
 
 class ROBit(RWBit):
@@ -142,9 +147,9 @@ class ROBit(RWBit):
 
     Values are `bool`
 
-    :param int register_address: The register address to read the bit from
-    :param type bit: The bit index within the byte at ``register_address``
-    :param int register_width: The number of bytes in the register. Defaults to 1.
+    :param BitRegister register: Bit register that contains this particular bit
+    :param int bit: The bit index within the byte at ``register_address``
+    :param bool lsb_first: Is the first byte we read from I2C the LSB? Defaults to true
     """
 
     def __set__(self, value: bool) -> NoReturn:
@@ -161,10 +166,8 @@ class RWBits:
 
     Values are `int` between 0 and 2 ** ``num_bits`` - 1.
 
-    :param int num_bits: The number of bits in the field.
-    :param int register_address: The register address to read the bit from
+    :param BitRegister register: Bit register that contains this particular bit
     :param int lowest_bit: The lowest bits index within the byte at ``register_address``
-    :param int register_width: The number of bytes in the register. Defaults to 1.
     :param bool lsb_first: Is the first byte we read from I2C the LSB? Defaults to true
     :param bool signed: If True, the value is a "two's complement" signed value.
                         If False, it is unsigned.
@@ -172,43 +175,43 @@ class RWBits:
 
     def __init__(  # pylint: disable=too-many-arguments
         self,
-        i2c_bus: I2C,
-        address: int,
+        register: BitRegister,
         num_bits: int,
-        register_address: int,
         lowest_bit: int,
-        register_width: int = 1,
         lsb_first: bool = True,
         signed: bool = False,
     ) -> None:
-        self.i2c_bus = i2c_bus
-        self.address = address
-
+        self.register = register
         self.bit_mask = ((1 << num_bits) - 1) << lowest_bit
         # print("bitmask: ",hex(self.bit_mask))
-        if self.bit_mask >= 1 << (register_width * 8):
+
+        if self.bit_mask >= 1 << (register.register_width * 8):
             raise ValueError("Cannot have more bits than register size")
+
         self.lowest_bit = lowest_bit
-        self.buffer = bytearray(register_width)
-        self.cmd_buffer = bytearray([register_address])
         self.lsb_first = lsb_first
         self.sign_bit = (1 << (num_bits - 1)) if signed else 0
 
-    def get(self) -> int:
-        # self.i2c_bus.writeto_then_readfrom(self.address, self.buffer, self.buffer, out_end=1, in_start=1)
-        self.i2c_bus.writeto(self.address, self.cmd_buffer)
-        sleep_ms(_SLEEP_MS_CONST)
-        self.i2c_bus.readfrom_into(self.address, self.buffer)
-        print("rbuff", self.buffer)
+    def get_order(self):
+        order = range(self.register.register_width - 1, -1, -1)
+        if not self.lsb_first:
+            order = reversed(order)
+        return order
+
+    def read_reg_raw(self):
+        buf = self.register.read()
 
         # read the number of bytes into a single variable
         reg = 0
-        order = range(len(self.buffer) - 1, -1, -1)
-        if not self.lsb_first:
-            order = reversed(order)
-        for i in order:
-            reg = (reg << 8) | self.buffer[i]
+        for i in self.get_order():
+            reg = (reg << 8) | buf[i]
+
+        return reg
+
+    def get(self) -> int:
+        reg = self.read_reg_raw()
         reg = (reg & self.bit_mask) >> self.lowest_bit
+
         # If the value is signed and negative, convert it
         if reg & self.sign_bit:
             reg -= 2 * self.sign_bit
@@ -219,28 +222,18 @@ class RWBits:
 
     def set(self, value: int) -> None:
         value <<= self.lowest_bit  # shift the value over to the right spot
-        # self.i2c_bus.writeto_then_readfrom(self.address, self.buffer, self.buffer, out_end=1, in_start=1)
-        self.i2c_bus.writeto(self.address, self.cmd_buffer)
-        sleep_ms(_SLEEP_MS_CONST)
-        self.i2c_bus.readfrom_into(self.address, self.buffer)
-        sleep_ms(_SLEEP_MS_CONST)
+        reg = self.read_reg_raw()
 
-        reg = 0
-        order = range(len(self.buffer) - 1, -1, -1)
-        if not self.lsb_first:
-            order = range(1, len(self.buffer))
-        for i in order:
-            reg = (reg << 8) | self.buffer[i]
-        print("bitmask: ", hex(self.bit_mask))
-        print("old reg: ", hex(reg))
         reg &= ~self.bit_mask  # mask off the bits we're about to change
         reg |= value  # then or in our new value
-        print("new reg: ", hex(reg))
-        for i in reversed(order):
-            self.buffer[i] = reg & 0xFF
+        # print("new reg: ", hex(reg))
+
+        for i in reversed(self.get_order()):
+            self.register.buffer[i] = reg & 0xFF
             reg >>= 8
-        print(self.buffer)
-        self.i2c_bus.writeto(self.address, self.cmd_buffer + self.buffer)
+        # print(self.register.buffer)
+
+        self.register.write()
 
     def __set__(self, value: int) -> None:
         return self.set(value)
@@ -253,10 +246,11 @@ class ROBits(RWBits):
 
     Values are `int` between 0 and 2 ** ``num_bits`` - 1.
 
-    :param int num_bits: The number of bits in the field.
-    :param int register_address: The register address to read the bit from
-    :param type lowest_bit: The lowest bits index within the byte at ``register_address``
-    :param int register_width: The number of bytes in the register. Defaults to 1.
+    :param BitRegister register: Bit register that contains this particular bit
+    :param int lowest_bit: The lowest bits index within the byte at ``register_address``
+    :param bool lsb_first: Is the first byte we read from I2C the LSB? Defaults to true
+    :param bool signed: If True, the value is a "two's complement" signed value.
+                        If False, it is unsigned.
     """
 
     def __set__(self, value: int) -> NoReturn:
@@ -265,6 +259,7 @@ class ROBits(RWBits):
 
 class CCS811:
     """CCS811 gas sensor driver.
+    https://cdn.sparkfun.com/assets/2/c/c/6/5/CN04-2019_attachment_CCS811_Datasheet_v1-06.pdf
 
     :param ~busio.I2C i2c_bus: The I2C bus the BME280 is connected to
     :param int address: The I2C address of the CCS811. Defaults to :const:`0x5A`
@@ -303,14 +298,18 @@ class CCS811:
         self.address = address
 
         # set up the registers
-        self.error = ROBit(i2c_bus, address, 0x00, 0)  # True when an error has occurred.
-        self.data_ready = ROBit(i2c_bus, address, 0x00, 3)  # True when new data has been read.
-        self.app_valid = ROBit(i2c_bus, address, 0x00, 4)
-        self.fw_mode = ROBit(i2c_bus, address, 0x00, 7)
-        self.hw_id = ROBits(i2c_bus, address, 8, 0x20, 0)
-        self.int_thresh = RWBit(i2c_bus, address, 0x01, 2)
-        self.interrupt_enabled = RWBit(i2c_bus, address, 0x01, 3)
-        self.drive_mode = RWBits(i2c_bus, address, 3, 0x01, 4)
+        register_status = BitRegister(i2c_bus, address, 0x00, 1)
+        register_meas_mode = BitRegister(i2c_bus, address, 0x00, 1)
+        register_hw_id = BitRegister(i2c_bus, address, 0x20, 1)
+
+        self.error = ROBit(register_status, 0)  # True when an error has occurred.
+        self.data_ready = ROBit(register_status, 3)  # True when new data has been read.
+        self.app_valid = ROBit(register_status, 4)
+        self.fw_mode = ROBit(register_status, 7)
+        self.hw_id = ROBits(register_hw_id, 8, 0)
+        self.int_thresh = RWBit(register_meas_mode, 2)
+        self.interrupt_enabled = RWBit(register_meas_mode, 3)
+        self.drive_mode = RWBits(register_meas_mode, 3, 4)
         self.cmd_buf = bytearray(1)
         self.resp_buf8 = bytearray(8)
 
@@ -343,7 +342,7 @@ class CCS811:
                 "be a problem with the firmware on your sensor. {}".format(fw_mode)
             )
 
-        print("Initially looks ok, fw_mode", fw_mode, ", err mode", err)
+        print("Initially looks ok, fw_mode:", fw_mode, " err:", err)
         self.interrupt_enabled.set(False)
         sleep_ms(_SLEEP_MS_CONST)
 
@@ -362,7 +361,6 @@ class CCS811:
 
     def _i2c_read_words_from_cmd(self, command, delay, response_buffer):
         self.cmd_buf[0] = command
-        print(self.cmd_buf)
         self.i2c_bus.writeto(self.address, self.cmd_buf)
         sleep_ms(delay)
         if not response_buffer:
