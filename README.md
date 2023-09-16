@@ -1,4 +1,4 @@
 # Sensing library
 
-Home sensing tools
+Smart home sensing tools
 

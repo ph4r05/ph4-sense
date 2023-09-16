@@ -57,6 +57,7 @@ class Sensei:
         self.scd40_temp = None
         self.scd40_hum = None
 
+        self.num_tsync = 0
         self.last_tsync = utime.time() + 60
         self.last_pub = utime.time() + 30
         self.last_pub_sgp = utime.time() + 30
@@ -124,9 +125,9 @@ class Sensei:
         print("\nConnecting sensors")
         try:
             print(" - Connecting SGP30")
-            self.sgp30 = SGP30(self.i2c) if HAS_SGP30 else None
+            self.sgp30 = SGP30(self.i2c, measure_test=True) if HAS_SGP30 else None
             if HAS_SGP30:
-                self.sgp30.set_iaq_relative_humidity(21, 0.45)
+                self.sgp30.set_iaq_relative_humidity(26, 0.45)
                 self.sgp30.set_iaq_baseline(0x8973, 0x8AAE)
                 self.sgp30.iaq_init()
 
@@ -162,6 +163,7 @@ class Sensei:
             if cal_temp and cal_hum and utime.time() - self.last_tsync > 180:
                 if HAS_SGP30:
                     try_fnc(lambda: self.sgp30.set_iaq_relative_humidity(cal_temp, cal_hum))
+                    pass
                 if HAS_CCS811:
                     # try_fnc(lambda: self.ccs811.set_environmental_data(int(cal_hum), cal_temp))
                     pass
@@ -379,10 +381,13 @@ class Sensei:
         except Exception as e:
             print(f"MQTT connection error:", e)
 
-    def main(self):
-        print("Starting bus")
+    def start_bus(self):
         self.i2c = machine.SoftI2C(scl=machine.Pin(SPG30_SCL_PIN), sda=machine.Pin(SPG30_SDA_PIN))
         self.i2c.start()
+
+    def main(self):
+        print("Starting bus")
+        self.start_bus()
 
         print("Loading config")
         self.load_config()
