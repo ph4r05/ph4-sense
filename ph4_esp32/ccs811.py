@@ -94,7 +94,7 @@ class BitRegister:
         if reg is not None and reg != self.buffer:
             assert len(reg) == len(self.buffer)
             for i in range(reg):
-                self.buffer[0] = reg[0]
+                self.buffer[i] = reg[i]
 
         self.i2c_bus.writeto(self.address, self.cmd_buffer + self.buffer)
 
@@ -299,7 +299,7 @@ class CCS811:
 
         # set up the registers
         register_status = BitRegister(i2c_bus, address, 0x00, 1)
-        register_meas_mode = BitRegister(i2c_bus, address, 0x00, 1)
+        register_meas_mode = BitRegister(i2c_bus, address, 0x01, 1)
         register_hw_id = BitRegister(i2c_bus, address, 0x20, 1)
 
         self.error = ROBit(register_status, 0)  # True when an error has occurred.
