@@ -114,6 +114,10 @@ class SGP30:
         if addr not in self._i2c.scan():
             raise IOError("No SGP30 device found on I2C bus")
         self.addr = addr
+        self.cmd_buf_2 = bytearray(2)
+        self.resp_buf_6 = bytearray(6)
+        self.repl_buf_2 = bytearray(2)
+
         self.serial = self.get_serial()
         self.feature_set = self.get_feature_set()
         if measure_test:
@@ -274,19 +278,29 @@ class SGP30:
 
     def _i2c_read_words_from_cmd(self, command, delay, reply_size):
         """Runs an SGP command query, gets a reply and CRC results if necessary"""
-        self._i2c.writeto(self.addr, bytes(command))
+        if len(command) == 2:
+            self.cmd_buf_2[0] = command[0]
+            self.cmd_buf_2[1] = command[1]
+            cmd_buf = self.cmd_buf_2
+        else:
+            cmd_buf = bytes(command)
+
+        self._i2c.writeto(self.addr, cmd_buf)
         sleep_ms(delay)
         if not reply_size:
             return None
-        crc_result = bytearray(reply_size * (SGP30_WORD_LEN + 1))
+
+        buf_size = reply_size * (SGP30_WORD_LEN + 1)
+        crc_result = self.resp_buf_6 if buf_size == 6 else bytearray(buf_size)
         self._i2c.readfrom_into(self.addr, crc_result)
-        result = []
+
+        result = self.repl_buf_2 if reply_size == 2 else bytearray(reply_size)
         for i in range(reply_size):
             word = [crc_result[3 * i], crc_result[3 * i + 1]]
             crc = crc_result[3 * i + 2]
             if generate_crc(word) != crc:
                 raise RuntimeError("CRC Error")
-            result.append(word[0] << 8 | word[1])
+            result[i] = (word[0] << 8) | word[1]
         return result
 
 
