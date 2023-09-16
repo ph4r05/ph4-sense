@@ -154,8 +154,7 @@ class Sensei:
             cal_temp = self.scd40_temp
             cal_hum = self.scd40_hum
 
-            self.temp = try_fnc(lambda: self.aht21.temperature) if HAS_AHT else None
-            self.humd = try_fnc(lambda: self.aht21.relative_humidity) if HAS_AHT else None
+            self.temp, self.humd = try_fnc(lambda: self.aht21.read_temperature_humidity())
             if not cal_temp or not cal_hum:
                 cal_temp = self.temp
                 cal_hum = self.humd

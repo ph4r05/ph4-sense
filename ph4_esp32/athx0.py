@@ -82,8 +82,9 @@ class AHTx0:
     def __init__(self, i2c_bus: I2C, address: int = AHTX0_I2CADDR_DEFAULT) -> None:
         self.i2c_bus = i2c_bus
         self.address = address
-        self._buf = bytearray(6)
-        self._rbuf = bytearray(1)
+        self.data_buf = bytearray(6)
+        self.cmd_buf = bytearray(3)
+        self.status_buf = bytearray(1)
 
         print("Reset")
         self.reset()
@@ -95,16 +96,16 @@ class AHTx0:
 
     def reset(self) -> None:
         """Perform a soft-reset of the AHT"""
-        self._buf[0] = AHTX0_CMD_SOFTRESET
-        self.i2c_bus.writeto(self.address, self._buf[:1])
+        self.cmd_buf[0] = AHTX0_CMD_SOFTRESET
+        self.i2c_bus.writeto(self.address, self.cmd_buf[:1])
         sleep_ms(30)  # 20ms delay to wake up
 
     def calibrate(self) -> bool:
         """Ask the sensor to self-calibrate. Returns True on success, False otherwise"""
-        self._buf[0] = AHTX0_CMD_CALIBRATE
-        self._buf[1] = 0x08
-        self._buf[2] = 0x00
-        self.i2c_bus.writeto(self.address, self._buf[:3])
+        self.cmd_buf[0] = AHTX0_CMD_CALIBRATE
+        self.cmd_buf[1] = 0x08
+        self.cmd_buf[2] = 0x00
+        self.i2c_bus.writeto(self.address, self.cmd_buf)  # [:3]
 
         cycles = 0
         while self.status & AHTX0_STATUS_BUSY and cycles < 50:
@@ -118,9 +119,9 @@ class AHTx0:
     @property
     def status(self) -> int:
         """The status byte initially returned from the sensor, see datasheet for details"""
-        self.i2c_bus.readfrom_into(self.address, self._rbuf)
+        self.i2c_bus.readfrom_into(self.address, self.status_buf)
         # print("status: " + hex(self._rbuf[0]))
-        return self._rbuf[0]
+        return self.status_buf[0]
 
     @property
     def relative_humidity(self) -> int:
@@ -134,17 +135,22 @@ class AHTx0:
         self._readdata()
         return self._temp
 
+    def read_temperature_humidity(self):
+        self._readdata()
+        return self._temp, self._humidity
+
     def _readdata(self) -> None:
         """Internal function for triggering the AHT to read temp/humidity"""
-        self._buf[0] = AHTX0_CMD_TRIGGER
-        self._buf[1] = 0x33
-        self._buf[2] = 0x00
-        self.i2c_bus.writeto(self.address, self._buf[:3])
+        self.cmd_buf[0] = AHTX0_CMD_TRIGGER
+        self.cmd_buf[1] = 0x33
+        self.cmd_buf[2] = 0x00
+        self.i2c_bus.writeto(self.address, self.cmd_buf)  # [:3]
         while self.status & AHTX0_STATUS_BUSY:
             sleep_ms(12)
-        self.i2c_bus.readfrom_into(self.address, self._buf)
 
-        self._humidity = (self._buf[1] << 12) | (self._buf[2] << 4) | (self._buf[3] >> 4)
+        self.i2c_bus.readfrom_into(self.address, self.data_buf)
+
+        self._humidity = (self.data_buf[1] << 12) | (self.data_buf[2] << 4) | (self.data_buf[3] >> 4)
         self._humidity = (self._humidity * 100) / 0x100000
-        self._temp = ((self._buf[3] & 0xF) << 16) | (self._buf[4] << 8) | self._buf[5]
+        self._temp = ((self.data_buf[3] & 0xF) << 16) | (self.data_buf[4] << 8) | self.data_buf[5]
         self._temp = ((self._temp * 200.0) / 0x100000) - 50
