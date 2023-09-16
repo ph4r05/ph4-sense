@@ -259,105 +259,110 @@ class Sensei:
             print(f"Err SDC40: ", e)
 
     def publish_booted(self):
-        self.mqtt_client.publish(
+        self.publish_payload(
             f"sensors/esp32{self.mqtt_sensor_suffix}",
-            json.dumps(
-                {
-                    "booted": True,
-                }
-            ),
+            {
+                "booted": True,
+            },
         )
 
     def publish(self):
+        self.publish_common()
+        self.publish_co2()
+
+    def publish_common(self):
         t = utime.time()
         if t - self.last_pub <= 60:
             return
 
         try:
             self.maybe_reconnect_mqtt()
-            if HAS_SGP30:
-                print(
-                    self.mqtt_client.publish(
-                        f"sensors/sgp30{self.mqtt_sensor_suffix}",
-                        json.dumps(
-                            {
-                                "eCO2": self.co2eq,
-                                "TVOC": self.tvoc,
-                                "Eth": self.eth,
-                                "H2": self.h2,
-                                "temp": self.temp,
-                                "humidity": self.humd,
-                            }
-                        ),
-                    )
-                )
-
-                print(
-                    self.mqtt_client.publish(
-                        f"sensors/sgp30_raw{self.mqtt_sensor_suffix}",
-                        json.dumps({"eCO2": self.last_sgp30_co2, "TVOC": self.last_sgp30_tvoc}),
-                    )
-                )
-
-                print(
-                    self.mqtt_client.publish(
-                        f"sensors/sgp30_filt{self.mqtt_sensor_suffix}",
-                        json.dumps(
-                            {
-                                "eCO2": self.eavg_sgp30_co2.cur,
-                                "TVOC": self.eavg_sgp30_tvoc.cur,
-                            }
-                        ),
-                    )
-                )
-
-            if HAS_CCS811:
-                print(
-                    self.mqtt_client.publish(
-                        f"sensors/ccs811_raw{self.mqtt_sensor_suffix}",
-                        json.dumps(
-                            {
-                                "eCO2": self.last_ccs811_co2,
-                                "TVOC": self.last_ccs811_tvoc,
-                            }
-                        ),
-                    )
-                )
-
-                print(
-                    self.mqtt_client.publish(
-                        f"sensors/ccs811_filt{self.mqtt_sensor_suffix}",
-                        json.dumps(
-                            {
-                                "eCO2": self.eavg_css811_co2.cur,
-                                "TVOC": self.eavg_css811_tvoc.cur,
-                            }
-                        ),
-                    )
-                )
-
+            self.publish_sgp30()
+            self.publish_ccs811()
             self.last_pub = t
         except Exception as e:
             print(f"Error in pub:", e)
 
-        if HAS_SCD4X and t - self.last_pub_sgp > 60 and self.scd40_co2 is not None and self.scd40_co2 > 0:
-            try:
-                print(
-                    self.mqtt_client.publish(
-                        f"sensors/scd40{self.mqtt_sensor_suffix}",
-                        json.dumps(
-                            {
-                                "eCO2": self.scd40_co2,
-                                "temp": self.scd40_temp,
-                                "humidity": self.scd40_hum,
-                            }
-                        ),
-                    )
-                )
+    def publish_co2(self):
+        if not HAS_SCD4X:
+            return
 
+        t = utime.time()
+        if t - self.last_pub_sgp > 60 and self.scd40_co2 is not None and self.scd40_co2 > 0:
+            try:
+                self.publish_scd40()
                 self.last_pub_sgp = t
             except Exception as e:
                 print(f"Error in pub:", e)
+
+    def publish_msg(self, topic: str, message: str):
+        self.mqtt_client.publish(topic, message)
+        print(f"Published {topic}:", message)
+
+    def publish_payload(self, topic: str, payload: dict):
+        self.publish_msg(topic, json.dumps(payload))
+
+    def publish_sgp30(self):
+        if not HAS_SGP30:
+            return
+
+        self.publish_payload(
+            f"sensors/sgp30{self.mqtt_sensor_suffix}",
+            {
+                "eCO2": self.co2eq,
+                "TVOC": self.tvoc,
+                "Eth": self.eth,
+                "H2": self.h2,
+                "temp": self.temp,
+                "humidity": self.humd,
+            },
+        )
+
+        self.publish_payload(
+            f"sensors/sgp30_raw{self.mqtt_sensor_suffix}",
+            {"eCO2": self.last_sgp30_co2, "TVOC": self.last_sgp30_tvoc},
+        )
+
+        self.publish_payload(
+            f"sensors/sgp30_filt{self.mqtt_sensor_suffix}",
+            {
+                "eCO2": self.eavg_sgp30_co2.cur,
+                "TVOC": self.eavg_sgp30_tvoc.cur,
+            },
+        )
+
+    def publish_ccs811(self):
+        if not HAS_CCS811:
+            return
+
+        self.publish_payload(
+            f"sensors/ccs811_raw{self.mqtt_sensor_suffix}",
+            {
+                "eCO2": self.last_ccs811_co2,
+                "TVOC": self.last_ccs811_tvoc,
+            },
+        )
+
+        self.publish_payload(
+            f"sensors/ccs811_filt{self.mqtt_sensor_suffix}",
+            {
+                "eCO2": self.eavg_css811_co2.cur,
+                "TVOC": self.eavg_css811_tvoc.cur,
+            },
+        )
+
+    def publish_scd40(self):
+        if not HAS_SCD4X:
+            return
+
+        self.publish_payload(
+            f"sensors/scd40{self.mqtt_sensor_suffix}",
+            {
+                "eCO2": self.scd40_co2,
+                "temp": self.scd40_temp,
+                "humidity": self.scd40_hum,
+            },
+        )
 
     def maybe_reconnect_mqtt(self):
         t = utime.time()
