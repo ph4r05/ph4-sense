@@ -64,7 +64,7 @@ SGP30_CMD_IAQ_INIT_WORDS = const(0)
 SGP30_CMD_IAQ_INIT_MAX_MS = const(10)
 SGP30_CMD_MEASURE_IAQ_HEX = [0x20, 0x08]
 SGP30_CMD_MEASURE_IAQ_WORDS = const(2)
-SGP30_CMD_MEASURE_IAQ_MS = const(12)
+SGP30_CMD_MEASURE_IAQ_MS = const(50)
 SGP30_CMD_GET_IAQ_BASELINE_HEX = [0x20, 0x15]
 SGP30_CMD_GET_IAQ_BASELINE_WORDS = const(2)
 SGP30_CMD_GET_IAQ_BASELINE_MAX_MS = const(10)
@@ -103,7 +103,7 @@ class SGP30:
     A driver for the SGP30 gas sensor.
 
     :param i2c: The "I2C" object to use. This is the only required parameter.
-    :param int address: (optional) The I2C address of the device.
+    :param int addr: (optional) The I2C address of the device.
     :param boolean measure_test: (optional) Whether to run on-chip test during initialisation.
     :param boolean iaq_init: (optional) Whether to initialise SGP30 algorithm / baseline.
     """
@@ -121,8 +121,11 @@ class SGP30:
         self.serial = self.get_serial()
         self.feature_set = self.get_feature_set()
         if measure_test:
-            if SGP30_MEASURE_TEST_PASS != self.measure_test():
-                raise RuntimeError("Device failed the on-chip test")
+            test_result = self.measure_test()
+            if SGP30_MEASURE_TEST_PASS != test_result:
+                print("Err: Device failed the on-chip test: ", hex(test_result))
+                # raise RuntimeError("Device failed the on-chip test")
+
         print(
             "SGP30 device discovered...\n"
             + "I2C address: "
@@ -192,11 +195,8 @@ class SGP30:
         The absolute humidity is calculated from the temperature (Celsius)
         and relative humidity (as a percentage).
         """
-        numerator = ((relative_humidity / 100) * 6.112) * exp((17.62 * celsius) / (243.12 + celsius))
-        denominator = 273.15 + celsius
-
-        humidity_grams_pm3 = int(216.7 * (numerator / denominator))
-        self.set_absolute_humidity(humidity_grams_pm3)
+        a_humidity_gm3 = convert_r_to_a_humidity(celsius, relative_humidity, True)
+        self.set_absolute_humidity(a_humidity_gm3)
 
     def measure_test(self):
         """Runs on-chip self test"""
@@ -294,8 +294,7 @@ class SGP30:
 
         result = self.repl_buf_2 if reply_size == 2 else bytearray(reply_size)
         for i in range(reply_size):
-            crc = crc_result[3 * i + 2]
-            if generate_crc(crc_result, 3 * i, 3 * i + 2) != crc:
+            if generate_crc(crc_result, 3 * i, 3 * i + 2) != crc_result[3 * i + 2]:
                 raise RuntimeError("CRC Error")
             result[i] = (crc_result[3 * i] << 8) | crc_result[3 * i + 1]
         return result
