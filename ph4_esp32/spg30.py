@@ -164,11 +164,11 @@ class SGP30:
         """Sets the previously recorded IAQ algorithm baseline for CO2eq and TVOC"""
         if co2eq == 0 and tvoc == 0:
             raise ValueError("Invalid baseline values used")
-        buffer = []
-        for value in [tvoc, co2eq]:
-            arr = [value >> 8, value & 0xFF]
-            arr.append(generate_crc(arr))
-            buffer += arr
+
+        buffer = [tvoc >> 8, tvoc & 0xFF, 0, co2eq >> 8, co2eq & 0xFF, 0]  # tvoc, crc, co2, crc
+        buffer[2] = generate_crc(buffer, 0, 2)
+        buffer[5] = generate_crc(buffer, 3, 6)
+
         self._i2c_read_words_from_cmd(
             SGP30_CMD_SET_IAQ_BASELINE_HEX + buffer,
             SGP30_CMD_SET_IAQ_BASELINE_MAX_MS,
@@ -178,10 +178,8 @@ class SGP30:
     def set_absolute_humidity(self, absolute_humidity):
         """Sets absolute humidity compensation. To disable,
         set 0."""
-        buffer = []
-        arr = [absolute_humidity >> 8, absolute_humidity & 0xFF]
-        arr.append(generate_crc(arr))
-        buffer += arr
+        buffer = [absolute_humidity >> 8, absolute_humidity & 0xFF, 0]
+        buffer[2] = generate_crc(buffer, 0, 2)
         self._i2c_read_words_from_cmd(
             SGP30_CMD_SET_ABSOLUTE_HUMIDITY_HEX + buffer,
             SGP30_CMD_SET_ABSOLUTE_HUMIDITY_MAX_MS,
@@ -296,20 +294,20 @@ class SGP30:
 
         result = self.repl_buf_2 if reply_size == 2 else bytearray(reply_size)
         for i in range(reply_size):
-            word = [crc_result[3 * i], crc_result[3 * i + 1]]
             crc = crc_result[3 * i + 2]
-            if generate_crc(word) != crc:
+            if generate_crc(crc_result, 3 * i, 3 * i + 2) != crc:
                 raise RuntimeError("CRC Error")
-            result[i] = (word[0] << 8) | word[1]
+            result[i] = (crc_result[3 * i] << 8) | crc_result[3 * i + 1]
         return result
 
 
-def generate_crc(data):
+def generate_crc(data, offset=0, limit=None):
     """8-bit CRC algorithm for checking data.
     Calculation described in section 6.6 of SGP30 datasheet"""
     crc = SGP30_CRC8_INIT
     # Calculates 8-Bit CRC checksum with given polynomial
-    for byte in data:
+    for idx in range(offset, len(data) if limit is None else limit):
+        byte = data[idx]
         crc ^= byte
         for _ in range(8):
             if crc & 0x80:
