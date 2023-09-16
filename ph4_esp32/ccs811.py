@@ -102,7 +102,7 @@ class RWBit:
 
         self.bit_mask = 1 << (bit % 8)  # the bitmask *within* the byte!
         self.buffer = bytearray(register_width)
-        self.wbuffer = bytearray([register_address])
+        self.cmd_buffer = bytearray([register_address])
         if lsb_first:
             self.byte = bit // 8  # the byte number within the buffer
         else:
@@ -113,7 +113,7 @@ class RWBit:
 
     def get(self) -> bool:
         # self.i2c_bus.writeto_then_readfrom(self.address, self.buffer, self.buffer, out_end=1, in_start=1)
-        self.i2c_bus.writeto(self.address, self.wbuffer)
+        self.i2c_bus.writeto(self.address, self.cmd_buffer)
         sleep_ms(_SLEEP_MS_CONST)
         self.i2c_bus.readfrom_into(self.address, self.buffer)
 
@@ -124,7 +124,7 @@ class RWBit:
 
     def set(self, value: bool) -> None:
         # self.i2c_bus.writeto_then_readfrom(self.address, self.buffer, self.buffer, out_end=1, in_start=1)
-        self.i2c_bus.writeto(self.address, self.wbuffer)
+        self.i2c_bus.writeto(self.address, self.cmd_buffer)
         sleep_ms(_SLEEP_MS_CONST)
         self.i2c_bus.readfrom_into(self.address, self.buffer)
         sleep_ms(_SLEEP_MS_CONST)
@@ -134,7 +134,7 @@ class RWBit:
         else:
             self.buffer[self.byte] &= ~self.bit_mask
 
-        self.i2c_bus.writeto(self.address, self.buffer)
+        self.i2c_bus.writeto(self.address, self.cmd_buffer + self.buffer)
 
 
 class ROBit(RWBit):
@@ -190,13 +190,13 @@ class RWBits:
             raise ValueError("Cannot have more bits than register size")
         self.lowest_bit = lowest_bit
         self.buffer = bytearray(register_width)
-        self.wbuffer = bytearray([register_address])
+        self.cmd_buffer = bytearray([register_address])
         self.lsb_first = lsb_first
         self.sign_bit = (1 << (num_bits - 1)) if signed else 0
 
     def get(self) -> int:
         # self.i2c_bus.writeto_then_readfrom(self.address, self.buffer, self.buffer, out_end=1, in_start=1)
-        self.i2c_bus.writeto(self.address, self.wbuffer)
+        self.i2c_bus.writeto(self.address, self.cmd_buffer)
         sleep_ms(_SLEEP_MS_CONST)
         self.i2c_bus.readfrom_into(self.address, self.buffer)
         print("rbuff", self.buffer)
@@ -220,7 +220,7 @@ class RWBits:
     def set(self, value: int) -> None:
         value <<= self.lowest_bit  # shift the value over to the right spot
         # self.i2c_bus.writeto_then_readfrom(self.address, self.buffer, self.buffer, out_end=1, in_start=1)
-        self.i2c_bus.writeto(self.address, self.wbuffer)
+        self.i2c_bus.writeto(self.address, self.cmd_buffer)
         sleep_ms(_SLEEP_MS_CONST)
         self.i2c_bus.readfrom_into(self.address, self.buffer)
         sleep_ms(_SLEEP_MS_CONST)
@@ -240,7 +240,7 @@ class RWBits:
             self.buffer[i] = reg & 0xFF
             reg >>= 8
         print(self.buffer)
-        self.i2c_bus.writeto(self.address, self.buffer)
+        self.i2c_bus.writeto(self.address, self.cmd_buffer + self.buffer)
 
     def __set__(self, value: int) -> None:
         return self.set(value)
@@ -348,30 +348,14 @@ class CCS811:
         sleep_ms(_SLEEP_MS_CONST)
 
         # default to read every second
-        self.drive_mode.set(DRIVE_MODE_250MS)
-        sleep_ms(_SLEEP_MS_CONST)
-
-        print("Drive mode", self.drive_mode.get())
-        sleep_ms(_SLEEP_MS_CONST)
         self.drive_mode.set(DRIVE_MODE_1SEC)
         sleep_ms(_SLEEP_MS_CONST)
-
-        err = self.error.get()
-        r_error = self.error_code
-        print("err", err, r_error, CCS811Custom.err_to_str(r_error))
-
         print("Drive mode", self.drive_mode.get())
-        sleep_ms(_SLEEP_MS_CONST)
-        print("interrupt_enabled", self.interrupt_enabled.get())
-        sleep_ms(_SLEEP_MS_CONST)
-        print("app_valid", self.app_valid.get())
-        sleep_ms(_SLEEP_MS_CONST)
-        print("data_ready", self.data_ready.get())
-        sleep_ms(_SLEEP_MS_CONST)
 
         err = self.error.get()
-        r_error = self.error_code
-        print("err", err, r_error, CCS811Custom.err_to_str(r_error))
+        if err:
+            r_error = self.error_code
+            print("err", err, r_error, CCS811Custom.err_to_str(r_error))
 
         self._eco2 = None  # pylint: disable=invalid-name
         self._tvoc = None  # pylint: disable=invalid-name
