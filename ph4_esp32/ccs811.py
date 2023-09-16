@@ -323,7 +323,6 @@ class CCS811:
 
         # try to start the app
         self._i2c_read_words_from_cmd(0xF4, 150, None)
-        print(self.cmd_buf)
 
         # make sure there are no errors and we have entered application mode
         err = self.error.get()

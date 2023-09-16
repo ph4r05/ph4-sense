@@ -141,7 +141,7 @@ class Sensei:
             if HAS_SCD4X:
                 self.scd4x.start_periodic_measurement()
 
-            print("\n Sensors connected")
+            print("\nSensors connected")
         except Exception as e:
             print("Exception in sensor init: ", e)
             raise
