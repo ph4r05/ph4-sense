@@ -178,10 +178,20 @@ class Sensei:
             return
 
         try:
-            self.sgp30.measure_iaq()
+            self.co2eq_1, self.tvoc = self.sgp30.co2eq_tvoc()
+            self.h2, self.eth = self.sgp30.raw_h2_ethanol()
+
+            if self.co2eq_1:
+                self.eavg_sgp30_co2.update(self.co2eq_1)
+                self.last_sgp30_co2 = self.co2eq_1
+
+            if self.tvoc:
+                self.last_sgp30_tvoc = self.tvoc
+                self.eavg_sgp30_tvoc.update(self.tvoc)
+
         except Exception as e:
-            print("Exception measurement:", e)
-            sleep_ms(1000)
+            print(f"SGP30 err:", e)
+            return
 
     def measure_ccs811(self):
         if not HAS_CCS811:
@@ -225,17 +235,8 @@ class Sensei:
     def update_metrics(self):
         try:
             valid_cnt = 0
-            self.co2eq_1, self.tvoc = self.sgp30.co2eq_tvoc()
-            self.h2, self.eth = self.sgp30.raw_h2_ethanol()
-
             if self.co2eq_1:
-                self.eavg_sgp30_co2.update(self.co2eq_1)
-                self.last_sgp30_co2 = self.co2eq_1
                 valid_cnt += 1
-
-            if self.tvoc:
-                self.last_sgp30_tvoc = self.tvoc
-                self.eavg_sgp30_tvoc.update(self.tvoc)
 
             if HAS_CCS811 and self.last_ccs811_co2:
                 valid_cnt += 1
@@ -244,7 +245,7 @@ class Sensei:
                 self.eavg.update((self.last_sgp30_co2 + self.last_ccs811_co2) / valid_cnt) if valid_cnt else 0.0
             )
         except Exception as e:
-            print(f"SGP30 err:", e)
+            print(f"Metrics update err:", e)
             return
 
     def measure_scd4x(self):
@@ -397,7 +398,6 @@ class Sensei:
             self.measure_temperature()
             self.measure_sqp30()
             self.measure_ccs811()
-            self.measure_sqp30()
             self.measure_scd4x()
             self.update_metrics()
 
