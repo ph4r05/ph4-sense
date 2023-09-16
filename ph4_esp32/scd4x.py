@@ -104,11 +104,9 @@ class SCD4X:
     """
 
     def __init__(self, i2c_bus: I2C, address: int = SCD4X_DEFAULT_ADDR) -> None:
-        print("__init__ :", dir())
-        print("address : %x" % address)
-        print("i2c_bus : ", i2c_bus)
+        print("scd4x address: %x" % (address,))
+        print("scd4x i2c_bus: ", i2c_bus)
         self.address = address
-        print(i2c_bus)
         self.i2c_device = i2c_bus
         self._buffer = bytearray(18)
         self._cmd = bytearray(2)
@@ -298,9 +296,7 @@ class SCD4X:
     @temperature_offset.setter
     def temperature_offset(self, offset: Union[int, float]) -> None:
         if offset > 374:
-            raise AttributeError(
-                "Offset value must be less than or equal to 374 degrees Celsius"
-            )
+            raise AttributeError("Offset value must be less than or equal to 374 degrees Celsius")
         temp = int(offset * 2**16 / 175)
         self._set_command_value(_SCD4X_SETTEMPOFFSET, temp)
 
@@ -340,8 +336,7 @@ class SCD4X:
             self.i2c_device.writeto(self.address, self._cmd)
         except OSError as err:
             raise RuntimeError(
-                "Could not communicate via I2C, some commands/settings "
-                "unavailable while in working mode"
+                "Could not communicate via I2C, some commands/settings unavailable while in working mode"
             ) from err
         time.sleep(cmd_delay)
 
