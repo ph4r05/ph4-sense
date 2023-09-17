@@ -7,4 +7,5 @@ Virtualenv
 build
 venv
 .ipynb_checkpoints
+config.json
 ph4_esp32/config.json
