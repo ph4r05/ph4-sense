@@ -183,8 +183,9 @@ class Sensei:
                 if self.sgp30:
                     try_fnc(lambda: self.sgp30.set_iaq_relative_humidity(cal_temp, cal_hum))
                     pass
+
                 if self.ccs811:
-                    # try_fnc(lambda: self.ccs811.set_environmental_data(int(cal_hum), cal_temp))
+                    try_fnc(lambda: self.ccs811.set_environmental_data(cal_hum, cal_temp))
                     pass
 
                 self.last_tsync = utime.time()

@@ -439,7 +439,7 @@ class CCS811:
         ntc_temp -= 273.15
         return ntc_temp - self.temp_offset
 
-    def set_environmental_data(self, humidity: int, temperature: float) -> None:
+    def set_environmental_data(self, humidity: float, temperature: float) -> None:
         """Set the temperature and humidity used when computing eCO2 and TVOC values.
 
         :param int humidity: The current relative humidity in percent.
