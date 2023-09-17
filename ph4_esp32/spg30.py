@@ -116,7 +116,7 @@ class SGP30:
         self.addr = addr
         self.cmd_buf_2 = bytearray(2)
         self.resp_buf_6 = bytearray(6)
-        self.repl_buf_2 = bytearray(2)
+        self.repl_buf_2 = [0, 0]
 
         self.serial = self.get_serial()
         self.feature_set = self.get_feature_set()
@@ -163,12 +163,12 @@ class SGP30:
             SGP30_CMD_GET_IAQ_BASELINE_WORDS,
         )
 
-    def set_iaq_baseline(self, co2eq, tvoc):
+    def set_iaq_baseline(self, co2eq: int, tvoc: int):
         """Sets the previously recorded IAQ algorithm baseline for CO2eq and TVOC"""
         if co2eq == 0 and tvoc == 0:
             raise ValueError("Invalid baseline values used")
 
-        buffer = [tvoc >> 8, tvoc & 0xFF, 0, co2eq >> 8, co2eq & 0xFF, 0]  # tvoc, crc, co2, crc
+        buffer = [(tvoc >> 8) & 0xFF, tvoc & 0xFF, 0, (co2eq >> 8) & 0xFF, co2eq & 0xFF, 0]  # tvoc, crc, co2, crc
         buffer[2] = generate_crc(buffer, 0, 2)
         buffer[5] = generate_crc(buffer, 3, 6)
 
@@ -178,10 +178,10 @@ class SGP30:
             SGP30_CMD_SET_IAQ_BASELINE_WORDS,
         )
 
-    def set_absolute_humidity(self, absolute_humidity):
+    def set_absolute_humidity(self, absolute_humidity: int):
         """Sets absolute humidity compensation. To disable,
         set 0."""
-        buffer = [absolute_humidity >> 8, absolute_humidity & 0xFF, 0]
+        buffer = [(absolute_humidity >> 8) & 0xFF, absolute_humidity & 0xFF, 0]
         buffer[2] = generate_crc(buffer, 0, 2)
         self._i2c_read_words_from_cmd(
             SGP30_CMD_SET_ABSOLUTE_HUMIDITY_HEX + buffer,
@@ -292,7 +292,7 @@ class SGP30:
         crc_result = self.resp_buf_6 if buf_size == 6 else bytearray(buf_size)
         self._i2c.readfrom_into(self.addr, crc_result)
 
-        result = self.repl_buf_2 if reply_size == 2 else bytearray(reply_size)
+        result = self.repl_buf_2 if reply_size == 2 else [0] * reply_size
         for i in range(reply_size):
             if generate_crc(crc_result, 3 * i, 3 * i + 2) != crc_result[3 * i + 2]:
                 raise RuntimeError("CRC Error")
@@ -316,7 +316,7 @@ def generate_crc(data, offset=0, limit=None):
     return crc & 0xFF
 
 
-def convert_r_to_a_humidity(temp_c, r_humidity_perc, fixed_point=True):
+def convert_r_to_a_humidity(temp_c: float, r_humidity_perc: float, fixed_point=True) -> int:
     """Converts relative to absolute humidity as per the equation
     found in datasheet"""
     a_humidity_gm3 = 216.7 * (
