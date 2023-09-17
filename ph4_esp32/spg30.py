@@ -101,6 +101,7 @@ SGP30_CMD_GET_SERIAL_ID_MAX_MS = const(10)
 class SGP30:
     """
     A driver for the SGP30 gas sensor.
+    https://www.mouser.com/pdfdocs/Sensirion_Gas_Sensors_SGP30_Datasheet_EN-1148053.pdf
 
     :param i2c: The "I2C" object to use. This is the only required parameter.
     :param int addr: (optional) The I2C address of the device.
