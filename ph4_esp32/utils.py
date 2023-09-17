@@ -1,6 +1,3 @@
-from machine import I2C
-
-
 def try_fnc(x, msg=None):
     try:
         return x()

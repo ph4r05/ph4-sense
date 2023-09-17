@@ -12,5 +12,6 @@
 #     time.sleep(1)
 print("Booted")
 
-import sense 
-sense.main()
+from ph4_esp32.sense import main
+
+main()

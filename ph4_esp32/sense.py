@@ -4,13 +4,13 @@ import ujson as json
 from umqtt.robust import MQTTClient
 from utime import sleep_ms
 
-from athx0 import AHTx0
-from ccs811 import CCS811Custom
-from scd4x import SCD4X
-from spg30 import SGP30
-from utils import try_fnc, dval
-from filters import ExpAverage, SensorFilter
-from udplogger import UdpLogger
+from ph4_esp32.sensors.athx0 import AHTx0
+from ph4_esp32.sensors.ccs811cust import CCS811Custom
+from ph4_esp32.sensors.scd4x import SCD4X
+from ph4_esp32.sensors.spg30 import SGP30
+from ph4_esp32.utils import try_fnc, dval
+from ph4_esp32.filters import ExpAverage, SensorFilter
+from ph4_esp32.udplogger import UdpLogger
 
 HAS_AHT = True
 HAS_SGP30 = True
@@ -32,10 +32,11 @@ class Sensei:
         self.has_mqtt = False
         self.mqtt_broker = None
         self.mqtt_port = 1883
-        self.mqtt_sensor_id = "bed"
-        self.mqtt_sensor_suffix = f"_{self.mqtt_sensor_id}"
-        self.mqtt_topic_sub = f"sensors/esp32_{self.mqtt_sensor_id}_sub"
-        self.mqtt_topic = f"sensors/esp32_{self.mqtt_sensor_id}_gas"
+        self.mqtt_sensor_id = None
+        self.mqtt_sensor_suffix = None
+        self.mqtt_topic_sub = None
+        self.mqtt_topic = None
+        self.set_sensor_id("bed")
 
         self.co2eq = 0
         self.co2eq_1 = 0
@@ -76,6 +77,12 @@ class Sensei:
         self.ccs811 = None
         self.scd4x = None
 
+    def set_sensor_id(self, sensor_id):
+        self.mqtt_sensor_id = sensor_id
+        self.mqtt_sensor_suffix = f"_{self.mqtt_sensor_id}"
+        self.mqtt_topic_sub = f"sensors/esp32_{self.mqtt_sensor_id}_sub"
+        self.mqtt_topic = f"sensors/esp32_{self.mqtt_sensor_id}_gas"
+
     def load_config(self):
         with open("config.json") as fh:
             js = json.load(fh)
@@ -91,6 +98,9 @@ class Sensei:
 
         if "udpLogger" in js:
             self.udp_logger = UdpLogger(js["udpLogger"])
+
+        if "sensorId" in js:
+            self.set_sensor_id(js["sensorId"])
 
     def print(self, msg, *args):
         print(msg, *args)
