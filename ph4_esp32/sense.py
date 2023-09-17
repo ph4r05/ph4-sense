@@ -24,6 +24,7 @@ SPG30_SDA_PIN = 21
 
 class Sensei:
     def __init__(self):
+        self.has_wifi = True
         self.wifi_ssid = None
         self.wifi_passphrase = None
         self.mqtt_broker = None
@@ -57,11 +58,11 @@ class Sensei:
         self.scd40_temp = None
         self.scd40_hum = None
 
-        self.num_tsync = 0
-        self.last_tsync = utime.time() + 60
+        self.last_tsync = 0
         self.last_pub = utime.time() + 30
         self.last_pub_sgp = utime.time() + 30
         self.last_reconnect = utime.time()
+        self.last_wifi_reconnect = 0
 
         self.i2c = None
         self.sta_if = None
@@ -75,15 +76,24 @@ class Sensei:
         with open("config.json") as fh:
             js = json.load(fh)
 
-        self.wifi_ssid = js["wifi"]["ssid"]
-        self.wifi_passphrase = js["wifi"]["passphrase"]
+        if "wifi" in js:
+            self.wifi_ssid = js["wifi"]["ssid"]
+            self.wifi_passphrase = js["wifi"]["passphrase"]
+            self.has_wifi = True
+
         self.mqtt_broker = js["mqtt"]["host"]
 
     def mqtt_callback(self, topic, msg):
         print("Received MQTT message:", topic, msg)
 
-    def connect_wifi(self):
+    def connect_wifi(self, force=False):
+        if not self.has_wifi:
+            return
+
         import network
+
+        if force:
+            self.sta_if = None
 
         if not self.sta_if:
             self.sta_if = network.WLAN(network.STA_IF)
@@ -104,9 +114,15 @@ class Sensei:
             while not self.sta_if.isconnected():
                 sleep_ms(500)
 
-        print("WiFi connected:", self.sta_if.ifconfig())
+            print("WiFi connected")
 
-    def connect_mqtt(self):
+            # Set unlimited WiFi reconnect attempts
+            self.sta_if.config(reconnects=-1)
+
+        print("WiFi status:", self.sta_if.status())
+        print("WiFi ifconfig:", self.sta_if.ifconfig())
+
+    def create_mqtt_client(self):
         # https://notebook.community/Wei1234c/Elastic_Network_of_Things_with_MQTT_and_MicroPython/notebooks/test/MQTT%20client%20test%20-%20MicroPython
         client = MQTTClient(
             f"esp32_client/{self.mqtt_sensor_id}",
@@ -121,14 +137,17 @@ class Sensei:
         client.subscribe(self.mqtt_topic_sub)
         return client
 
+    def connect_mqtt(self):
+        self.mqtt_client = self.create_mqtt_client()
+
     def connect_sensors(self):
         print("\nConnecting sensors")
         try:
             print(" - Connecting SGP30")
-            self.sgp30 = SGP30(self.i2c, measure_test=True) if HAS_SGP30 else None
-            if HAS_SGP30:
-                self.sgp30.set_iaq_relative_humidity(26, 0.45)
-                self.sgp30.set_iaq_baseline(0x8973, 0x8AAE)
+            self.sgp30 = SGP30(self.i2c, measure_test=True, iaq_init=False) if HAS_SGP30 else None
+            if self.sgp30:
+                # self.sgp30.set_iaq_baseline(0x8973, 0x8AAE)
+                self.sgp30.set_iaq_relative_humidity(26, 45)
                 self.sgp30.iaq_init()
 
             print("\n - Connecting AHT21")
@@ -139,7 +158,7 @@ class Sensei:
 
             print("\n - Connecting SCD40")
             self.scd4x = SCD4X(self.i2c) if HAS_SCD4X else None
-            if HAS_SCD4X:
+            if self.scd4x:
                 self.scd4x.start_periodic_measurement()
 
             print("\nSensors connected")
@@ -148,7 +167,7 @@ class Sensei:
             raise
 
     def measure_temperature(self):
-        if not HAS_AHT:
+        if not self.aht21:
             return
 
         try:
@@ -161,10 +180,10 @@ class Sensei:
                 cal_hum = self.humd
 
             if cal_temp and cal_hum and utime.time() - self.last_tsync > 180:
-                if HAS_SGP30:
+                if self.sgp30:
                     try_fnc(lambda: self.sgp30.set_iaq_relative_humidity(cal_temp, cal_hum))
                     pass
-                if HAS_CCS811:
+                if self.ccs811:
                     # try_fnc(lambda: self.ccs811.set_environmental_data(int(cal_hum), cal_temp))
                     pass
 
@@ -175,7 +194,7 @@ class Sensei:
             print("E: exc in temp", e)
 
     def measure_sqp30(self):
-        if not HAS_SGP30:
+        if not self.sgp30:
             return
 
         try:
@@ -183,8 +202,8 @@ class Sensei:
             self.h2, self.eth = self.sgp30.raw_h2_ethanol()
 
             if self.co2eq_1:
-                self.eavg_sgp30_co2.update(self.co2eq_1)
                 self.last_sgp30_co2 = self.co2eq_1
+                self.eavg_sgp30_co2.update(self.co2eq_1)
 
             if self.tvoc:
                 self.last_sgp30_tvoc = self.tvoc
@@ -195,7 +214,7 @@ class Sensei:
             return
 
     def measure_ccs811(self):
-        if not HAS_CCS811:
+        if not self.ccs811:
             return
 
         self.ccs_co2 = 0
@@ -233,24 +252,8 @@ class Sensei:
             print(f"CCS error: ", e)
             raise
 
-    def update_metrics(self):
-        try:
-            valid_cnt = 0
-            if self.co2eq_1:
-                valid_cnt += 1
-
-            if HAS_CCS811 and self.last_ccs811_co2:
-                valid_cnt += 1
-
-            self.co2eq = (
-                self.eavg.update((self.last_sgp30_co2 + self.last_ccs811_co2) / valid_cnt) if valid_cnt else 0.0
-            )
-        except Exception as e:
-            print(f"Metrics update err:", e)
-            return
-
     def measure_scd4x(self):
-        if not HAS_SCD4X:
+        if not self.scd4x:
             return
         try:
             if self.scd4x.data_ready:
@@ -259,6 +262,23 @@ class Sensei:
                 self.scd40_hum = self.scd4x.relative_humidity
         except Exception as e:
             print(f"Err SDC40: ", e)
+
+    def update_metrics(self):
+        try:
+            numerator = 0
+            valid_cnt = 0
+            if self.sgp30 and self.co2eq_1:
+                numerator += self.last_sgp30_co2
+                valid_cnt += 1
+
+            if self.ccs811 and self.last_ccs811_co2:
+                numerator += self.last_ccs811_co2
+                valid_cnt += 1
+
+            self.co2eq = self.eavg.update(numerator / valid_cnt) if valid_cnt else 0.0
+        except Exception as e:
+            print(f"Metrics update err:", e)
+            return
 
     def publish_booted(self):
         self.publish_payload(
@@ -278,6 +298,7 @@ class Sensei:
             return
 
         try:
+            self.check_wifi_ok()
             self.maybe_reconnect_mqtt()
             self.publish_sgp30()
             self.publish_ccs811()
@@ -286,7 +307,7 @@ class Sensei:
             print(f"Error in pub:", e)
 
     def publish_co2(self):
-        if not HAS_SCD4X:
+        if not self.scd4x:
             return
 
         t = utime.time()
@@ -305,7 +326,7 @@ class Sensei:
         self.publish_msg(topic, json.dumps(payload))
 
     def publish_sgp30(self):
-        if not HAS_SGP30:
+        if not self.sgp30:
             return
 
         self.publish_payload(
@@ -334,7 +355,7 @@ class Sensei:
         )
 
     def publish_ccs811(self):
-        if not HAS_CCS811:
+        if not self.ccs811:
             return
 
         self.publish_payload(
@@ -354,7 +375,7 @@ class Sensei:
         )
 
     def publish_scd40(self):
-        if not HAS_SCD4X:
+        if not self.scd4x:
             return
 
         self.publish_payload(
@@ -366,9 +387,48 @@ class Sensei:
             },
         )
 
-    def maybe_reconnect_mqtt(self):
+    def check_wifi_ok(self):
+        """
+        Possible WiFi statuses:
+            * ``STAT_IDLE`` -- no connection and no activity,
+            * ``STAT_CONNECTING`` -- connecting in progress,
+            * ``STAT_WRONG_PASSWORD`` -- failed due to incorrect password,
+            * ``STAT_NO_AP_FOUND`` -- failed because no access point replied,
+            * ``STAT_CONNECT_FAIL`` -- failed due to other problems,
+            * ``STAT_GOT_IP`` -- connection successful.
+        :return:
+        """
+        if not self.has_wifi:
+            return
+
+        try:
+            if not self.sta_if.isconnected():
+                raise ValueError("WiFi not connected")
+
+            wifi_status = self.sta_if.status()
+            is_connected = wifi_status == "STAT_GOT_IP"
+            if is_connected:
+                return
+
+            t = utime.time()
+            is_connecting = wifi_status == "STAT_CONNECTING"
+            if is_connecting and t - self.last_wifi_reconnect < 180:
+                return
+
+            try_fnc(lambda: self.sta_if.disconnect())
+
+        except Exception as e:
+            print("Network exception: ", e)
+
+        # When control flow gets here - reconnect
+        print("Reconnecting")
+        self.connect_wifi(force=True)
+        self.maybe_reconnect_mqtt(force=True)
+
+    def maybe_reconnect_mqtt(self, force=False):
         t = utime.time()
-        if self.mqtt_client is not None and t - self.last_reconnect < 60 * 3:
+
+        if not force and (self.mqtt_client is not None and t - self.last_reconnect < 60 * 3):
             return
 
         if self.mqtt_client:
@@ -376,7 +436,7 @@ class Sensei:
             sleep_ms(1000)
 
         try:
-            self.mqtt_client = self.connect_mqtt()
+            self.connect_mqtt()
             self.last_reconnect = t
         except Exception as e:
             print(f"MQTT connection error:", e)
@@ -396,7 +456,7 @@ class Sensei:
         self.connect_wifi()
 
         print("\nConnecting MQTT")
-        self.maybe_reconnect_mqtt()
+        self.connect_mqtt()
 
         self.connect_sensors()
         self.publish_booted()
@@ -419,7 +479,7 @@ class Sensei:
             )
 
             self.publish()
-            sleep_ms(2_000)
+            sleep_ms(1_000)
 
 
 def main():
