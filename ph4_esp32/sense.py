@@ -401,17 +401,19 @@ class Sensei:
         if not self.has_wifi:
             return
 
+        import network
+
         try:
             if not self.sta_if.isconnected():
                 raise ValueError("WiFi not connected")
 
             wifi_status = self.sta_if.status()
-            is_connected = wifi_status == "STAT_GOT_IP"
+            is_connected = wifi_status == network.STAT_GOT_IP
             if is_connected:
                 return
 
             t = utime.time()
-            is_connecting = wifi_status == "STAT_CONNECTING"
+            is_connecting = wifi_status == network.STAT_CONNECTING
             if is_connecting and t - self.last_wifi_reconnect < 180:
                 return
 
@@ -421,7 +423,7 @@ class Sensei:
             print("Network exception: ", e)
 
         # When control flow gets here - reconnect
-        print("Reconnecting")
+        print("WiFi Reconnecting")
         self.connect_wifi(force=True)
         self.maybe_reconnect_mqtt(force=True)
 
