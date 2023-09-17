@@ -10,6 +10,12 @@
 #     time.sleep(1)
 #     pycom.rgbled(0x0000FF)  # Blue
 #     time.sleep(1)
+
+# import esp
+# esp.osdebug(None)
+# import webrepl
+# webrepl.start()
+
 print("Booted")
 
 from ph4_esp32.sense import main
