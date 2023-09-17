@@ -10,6 +10,7 @@ from scd4x import SCD4X
 from spg30 import SGP30
 from utils import try_fnc, dval
 from filters import ExpAverage, SensorFilter
+from udplogger import UdpLogger
 
 HAS_AHT = True
 HAS_SGP30 = True
@@ -24,9 +25,11 @@ SPG30_SDA_PIN = 21
 
 class Sensei:
     def __init__(self):
-        self.has_wifi = True
+        self.has_wifi = False
         self.wifi_ssid = None
         self.wifi_passphrase = None
+
+        self.has_mqtt = False
         self.mqtt_broker = None
         self.mqtt_port = 1883
         self.mqtt_sensor_id = "bed"
@@ -67,6 +70,7 @@ class Sensei:
         self.i2c = None
         self.sta_if = None
         self.mqtt_client = None
+        self.udp_logger = None
         self.sgp30 = None
         self.aht21 = None
         self.ccs811 = None
@@ -81,10 +85,20 @@ class Sensei:
             self.wifi_passphrase = js["wifi"]["passphrase"]
             self.has_wifi = True
 
-        self.mqtt_broker = js["mqtt"]["host"]
+        if "mqtt" in js:
+            self.mqtt_broker = js["mqtt"]["host"]
+            self.has_mqtt = True
+
+        if "udpLogger" in js:
+            self.udp_logger = UdpLogger(js["udpLogger"])
+
+    def print(self, msg, *args):
+        print(msg, *args)
+        if self.udp_logger:
+            self.udp_logger.log_msg(msg, *args)
 
     def mqtt_callback(self, topic, msg):
-        print("Received MQTT message:", topic, msg)
+        self.print("Received MQTT message:", topic, msg)
 
     def connect_wifi(self, force=False):
         if not self.has_wifi:
@@ -141,29 +155,29 @@ class Sensei:
         self.mqtt_client = self.create_mqtt_client()
 
     def connect_sensors(self):
-        print("\nConnecting sensors")
+        self.print("\nConnecting sensors")
         try:
-            print(" - Connecting SGP30")
+            self.print(" - Connecting SGP30")
             self.sgp30 = SGP30(self.i2c, measure_test=True, iaq_init=False) if HAS_SGP30 else None
             if self.sgp30:
                 # self.sgp30.set_iaq_baseline(0x8973, 0x8AAE)
                 self.sgp30.set_iaq_relative_humidity(26, 45)
                 self.sgp30.iaq_init()
 
-            print("\n - Connecting AHT21")
+            self.print("\n - Connecting AHT21")
             self.aht21 = AHTx0(self.i2c) if HAS_AHT else None
 
-            print("\n - Connecting CCS811")
+            self.print("\n - Connecting CCS811")
             self.ccs811 = CCS811Custom(self.i2c) if HAS_CCS811 else None
 
-            print("\n - Connecting SCD40")
+            self.print("\n - Connecting SCD40")
             self.scd4x = SCD4X(self.i2c) if HAS_SCD4X else None
             if self.scd4x:
                 self.scd4x.start_periodic_measurement()
 
-            print("\nSensors connected")
+            self.print("\nSensors connected")
         except Exception as e:
-            print("Exception in sensor init: ", e)
+            self.print("Exception in sensor init: ", e)
             raise
 
     def measure_temperature(self):
@@ -189,10 +203,10 @@ class Sensei:
                     pass
 
                 self.last_tsync = utime.time()
-                print("Temp sync", cal_temp, cal_hum)
+                self.print("Temp sync", cal_temp, cal_hum)
 
         except Exception as e:
-            print("E: exc in temp", e)
+            self.print("E: exc in temp", e)
 
     def measure_sqp30(self):
         if not self.sgp30:
@@ -211,7 +225,7 @@ class Sensei:
                 self.eavg_sgp30_tvoc.update(self.tvoc)
 
         except Exception as e:
-            print(f"SGP30 err:", e)
+            self.print(f"SGP30 err:", e)
             return
 
     def measure_ccs811(self):
@@ -238,7 +252,7 @@ class Sensei:
 
             if inv_ctr or self.ccs811.r_overflow:
                 flg = (nccs_co2 or 0) & ~0x8000
-                print(
+                self.print(
                     f"  CCS inv read {inv_ctr}, orig ({self.ccs811.r_orig_co2} {flg}, "
                     + f"{self.ccs811.r_orig_tvoc}), "
                     + f"status: {self.ccs811.r_status}, "
@@ -248,9 +262,9 @@ class Sensei:
                 )
 
             if self.ccs811.error.get():
-                print(f"Err: {self.ccs811.r_error} = {CCS811Custom.err_to_str(self.ccs811.r_error)}")
+                self.print(f"Err: {self.ccs811.r_error} = {CCS811Custom.err_to_str(self.ccs811.r_error)}")
         except Exception as e:
-            print(f"CCS error: ", e)
+            self.print(f"CCS error: ", e)
             raise
 
     def measure_scd4x(self):
@@ -262,7 +276,7 @@ class Sensei:
                 self.scd40_temp = self.scd4x.temperature
                 self.scd40_hum = self.scd4x.relative_humidity
         except Exception as e:
-            print(f"Err SDC40: ", e)
+            self.print(f"Err SDC40: ", e)
 
     def update_metrics(self):
         try:
@@ -278,7 +292,7 @@ class Sensei:
 
             self.co2eq = self.eavg.update(numerator / valid_cnt) if valid_cnt else 0.0
         except Exception as e:
-            print(f"Metrics update err:", e)
+            self.print(f"Metrics update err:", e)
             return
 
     def publish_booted(self):
@@ -305,7 +319,7 @@ class Sensei:
             self.publish_ccs811()
             self.last_pub = t
         except Exception as e:
-            print(f"Error in pub:", e)
+            self.print(f"Error in pub:", e)
 
     def publish_co2(self):
         if not self.scd4x:
@@ -317,11 +331,11 @@ class Sensei:
                 self.publish_scd40()
                 self.last_pub_sgp = t
             except Exception as e:
-                print(f"Error in pub:", e)
+                self.print(f"Error in pub:", e)
 
     def publish_msg(self, topic: str, message: str):
         self.mqtt_client.publish(topic, message)
-        print(f"Published {topic}:", message)
+        self.print(f"Published {topic}:", message)
 
     def publish_payload(self, topic: str, payload: dict):
         self.publish_msg(topic, json.dumps(payload))
@@ -421,10 +435,10 @@ class Sensei:
             try_fnc(lambda: self.sta_if.disconnect())
 
         except Exception as e:
-            print("Network exception: ", e)
+            self.print("Network exception: ", e)
 
         # When control flow gets here - reconnect
-        print("WiFi Reconnecting")
+        self.print("WiFi Reconnecting")
         self.connect_wifi(force=True)
         self.maybe_reconnect_mqtt(force=True)
 
@@ -442,7 +456,7 @@ class Sensei:
             self.connect_mqtt()
             self.last_reconnect = t
         except Exception as e:
-            print(f"MQTT connection error:", e)
+            self.print(f"MQTT connection error:", e)
 
     def start_bus(self):
         self.i2c = machine.SoftI2C(scl=machine.Pin(SPG30_SCL_PIN), sda=machine.Pin(SPG30_SDA_PIN))
@@ -473,7 +487,7 @@ class Sensei:
             self.measure_scd4x()
             self.update_metrics()
 
-            print(
+            self.print(
                 f"CO2eq: {dval(self.co2eq):4.1f} (r={dval(self.co2eq_1):4d}) ppm, TVOC: {dval(self.tvoc):4d} ppb, "
                 + f"CCS CO2: {dval(self.ccs_co2):4d} ({dval(self.eavg_css811_co2.cur):4.1f}), "
                 + f"TVOC2: {dval(self.ccs_tvoc):3d} ({dval(self.eavg_css811_tvoc.cur):3.1f}), "
