@@ -82,7 +82,7 @@ class Sensei:
 
     def set_sensor_id(self, sensor_id):
         self.mqtt_sensor_id = sensor_id
-        self.mqtt_sensor_suffix = f"_{self.mqtt_sensor_id}"
+        self.mqtt_sensor_suffix = f"_{self.mqtt_sensor_id}" if self.mqtt_sensor_id else ""
         self.mqtt_topic_sub = f"sensors/esp32_{self.mqtt_sensor_id}_sub"
         self.mqtt_topic = f"sensors/esp32_{self.mqtt_sensor_id}_gas"
 

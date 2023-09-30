@@ -78,8 +78,8 @@ setup(
         "docs": docs_extras,
     },
     entry_points={
-        # "console_scripts": [
-        #     "ph4-ups-mon = ph4upsmonit.ups:main",
-        # ],
+        "console_scripts": [
+            "ph4-sensei = ph4_sense.sense_py:main",
+        ],
     },
 )

@@ -1,9 +1,17 @@
+import argparse
+import logging
+import sys
+
 import board  # adafruit-blinka
 import busio
+import coloredlogs
 import paho.mqtt.client as mqtt  # paho-mqtt
 from ph4monitlib.utils import load_config_file
 
 from ph4_sense.sense import Sensei
+
+logger = logging.getLogger(__name__)
+coloredlogs.install(level=logging.INFO)
 
 
 class SenseiPy(Sensei):
@@ -30,6 +38,7 @@ class SenseiPy(Sensei):
             sda_pin=sda_pin,
         )
         self.config_file = config_file
+        self.args = None
 
     def load_config_data(self):
         cfile = self.config_file or "config.json"
@@ -55,12 +64,28 @@ class SenseiPy(Sensei):
         self.mqtt_client.publish(topic, message)
         self.print(f"Published {topic}:", message)
 
+    def argparser(self):
+        parser = argparse.ArgumentParser(description="Sensei")
+        parser.add_argument("--debug", dest="debug", action="store_const", const=True, help="enables debug mode")
+        parser.add_argument("-c", "--config", dest="config", help="Config file to load")
+        return parser
 
-def main(**kwargs):
+    def main(self, sys_args=None):
+        parser = self.argparser()
+        self.args = parser.parse_args(sys_args)
+
+        if self.args.debug:
+            coloredlogs.install(level=logging.DEBUG)
+
+        self.config_file = self.args.config
+        super().main()
+
+
+def main(*args, **kwargs):
     sensei = SenseiPy(**kwargs)
-    sensei.main()
+    sensei.main(*args)
 
 
 # Run the main program
 if __name__ == "__main__":
-    main()
+    sys.exit(main(sys.argv[1:]))
