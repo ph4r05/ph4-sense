@@ -81,7 +81,7 @@ class Sensei:
         self.scd4x = None
 
     def set_sensor_id(self, sensor_id):
-        self.mqtt_sensor_id = sensor_id
+        self.mqtt_sensor_id = sensor_id or ""
         self.mqtt_sensor_suffix = f"_{self.mqtt_sensor_id}" if self.mqtt_sensor_id else ""
         self.mqtt_topic_sub = f"sensors/esp32_{self.mqtt_sensor_id}_sub"
         self.mqtt_topic = f"sensors/esp32_{self.mqtt_sensor_id}_gas"
@@ -410,7 +410,24 @@ class Sensei:
     def start_bus(self):
         raise NotImplementedError
 
-    def main(self):
+    def measure_loop_body(self):
+        self.measure_temperature()
+        self.measure_sqp30()
+        self.measure_ccs811()
+        self.measure_scd4x()
+        self.update_metrics()
+
+        self.print(
+            f"CO2eq: {dval(self.co2eq):4.1f} (r={dval(self.co2eq_1):4d}) ppm, TVOC: {dval(self.tvoc):4d} ppb, "
+            + f"CCS CO2: {dval(self.ccs_co2):4d} ({dval(self.eavg_css811_co2.cur):4.1f}), "
+            + f"TVOC2: {dval(self.ccs_tvoc):3d} ({dval(self.eavg_css811_tvoc.cur):3.1f}), "
+            + f"Eth: {dval(self.eth):5d}, H2: {self.h2:5d}, {dval(self.temp):4.2f} C, {dval(self.humd):4.2f} %%, "
+            + f"SCD40: {dval(self.scd40_co2):4.2f}, {dval(self.scd40_temp):4.2f} C, {dval(self.scd40_hum):4.2f} %% "
+        )
+
+        self.publish()
+
+    def init_connections(self):
         print("Starting bus")
         self.start_bus()
 
@@ -420,30 +437,18 @@ class Sensei:
         print("\nConnecting WiFi")
         self.connect_wifi()
 
-        print("\nConnecting MQTT")
+        self.print("\nConnecting MQTT")
         self.connect_mqtt()
 
         self.connect_sensors()
         self.publish_booted()
+
+    def main(self):
+        self.init_connections()
+
         while True:
             self.maybe_reconnect_mqtt()
-
-            # Measure temperature
-            self.measure_temperature()
-            self.measure_sqp30()
-            self.measure_ccs811()
-            self.measure_scd4x()
-            self.update_metrics()
-
-            self.print(
-                f"CO2eq: {dval(self.co2eq):4.1f} (r={dval(self.co2eq_1):4d}) ppm, TVOC: {dval(self.tvoc):4d} ppb, "
-                + f"CCS CO2: {dval(self.ccs_co2):4d} ({dval(self.eavg_css811_co2.cur):4.1f}), "
-                + f"TVOC2: {dval(self.ccs_tvoc):3d} ({dval(self.eavg_css811_tvoc.cur):3.1f}), "
-                + f"Eth: {dval(self.eth):5d}, H2: {self.h2:5d}, {dval(self.temp):4.2f} C, {dval(self.humd):4.2f} %%, "
-                + f"SCD40: {dval(self.scd40_co2):4.2f}, {dval(self.scd40_temp):4.2f} C, {dval(self.scd40_hum):4.2f} %% "
-            )
-
-            self.publish()
+            self.measure_loop_body()
             sleep_ms(1_000)
 
 
