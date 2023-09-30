@@ -46,8 +46,10 @@ Implementation Notes
 """
 
 from math import exp
-from utime import sleep_ms
+from typing import Union
+
 from micropython import const
+from utime import sleep_ms
 
 # General SGP30 settings
 SGP30_DEFAULT_I2C_ADDR = const(0x58)
@@ -196,7 +198,7 @@ class SGP30:
         The absolute humidity is calculated from the temperature (Celsius)
         and relative humidity (as a percentage).
         """
-        a_humidity_gm3 = convert_r_to_a_humidity(celsius, relative_humidity, True)
+        a_humidity_gm3 = int(convert_r_to_a_humidity(celsius, relative_humidity, True))
         self.set_absolute_humidity(a_humidity_gm3)
 
     def measure_test(self):
@@ -317,7 +319,7 @@ def generate_crc(data, offset=0, limit=None):
     return crc & 0xFF
 
 
-def convert_r_to_a_humidity(temp_c: float, r_humidity_perc: float, fixed_point=True) -> int:
+def convert_r_to_a_humidity(temp_c: float, r_humidity_perc: float, fixed_point=True) -> Union[float, int]:
     """Converts relative to absolute humidity as per the equation
     found in datasheet"""
     a_humidity_gm3 = 216.7 * (

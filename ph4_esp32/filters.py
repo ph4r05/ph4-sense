@@ -21,7 +21,7 @@ class Deque:
         self._size = 0
         if iterable:
             if len(iterable) > maxlen:
-                raise ValueError('Iterable bigger than maxlen')
+                raise ValueError("Iterable bigger than maxlen")
             for ix, val in enumerate(iterable):
                 self._deque[ix] = val
             self._size = len(iterable)
