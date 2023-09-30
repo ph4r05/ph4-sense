@@ -5,6 +5,6 @@
 
 print("Booted")
 
-from ph4_esp32.sense import main  # noqa: E402
+from ph4_esp32.sense_mp import main  # noqa: E402
 
 main()

@@ -1,9 +1,4 @@
-import machine
-import ujson as json
-import utime
-from umqtt.robust import MQTTClient
-from utime import sleep_ms
-
+from ph4_esp32.adapters import json, sleep_ms, time
 from ph4_esp32.filters import ExpAverage, SensorFilter
 from ph4_esp32.sensors.athx0 import ahtx0_factory
 from ph4_esp32.sensors.ccs811 import CCS811Custom, css811_factory
@@ -12,20 +7,28 @@ from ph4_esp32.sensors.sgp30 import sgp30_factory
 from ph4_esp32.udplogger import UdpLogger
 from ph4_esp32.utils import dval, try_fnc
 
-HAS_AHT = True
-HAS_SGP30 = True
-HAS_CCS811 = True
-HAS_SCD4X = True
-
-# Set up your SPG30 sensor pin connections
-# https://randomnerdtutorials.com/esp32-i2c-communication-arduino-ide/
-SPG30_SCL_PIN = 22
-SPG30_SDA_PIN = 21
-
 
 class Sensei:
-    def __init__(self):
-        self.has_wifi = False
+    def __init__(
+        self,
+        is_esp32=True,
+        has_wifi=True,
+        has_aht=True,
+        has_sgp30=True,
+        has_ccs811=True,
+        has_scd4x=True,
+        scl_pin=22,
+        sda_pin=21,
+    ):
+        self.is_esp32 = is_esp32
+        self.has_wifi = has_wifi
+        self.has_aht = has_aht
+        self.has_sgp30 = has_sgp30
+        self.has_ccs811 = has_ccs811
+        self.has_scd4x = has_scd4x
+        self.scl_pin = scl_pin
+        self.sda_pin = sda_pin
+
         self.wifi_ssid = None
         self.wifi_passphrase = None
 
@@ -63,9 +66,9 @@ class Sensei:
         self.scd40_hum = None
 
         self.last_tsync = 0
-        self.last_pub = utime.time() + 30
-        self.last_pub_sgp = utime.time() + 30
-        self.last_reconnect = utime.time()
+        self.last_pub = time.time() + 30
+        self.last_pub_sgp = time.time() + 30
+        self.last_reconnect = time.time()
         self.last_wifi_reconnect = 0
 
         self.i2c = None
@@ -83,10 +86,12 @@ class Sensei:
         self.mqtt_topic_sub = f"sensors/esp32_{self.mqtt_sensor_id}_sub"
         self.mqtt_topic = f"sensors/esp32_{self.mqtt_sensor_id}_gas"
 
-    def load_config(self):
+    def load_config_data(self):
         with open("config.json") as fh:
-            js = json.load(fh)
+            return json.load(fh)
 
+    def load_config(self):
+        js = self.load_config_data()
         if "wifi" in js:
             self.wifi_ssid = js["wifi"]["ssid"]
             self.wifi_passphrase = js["wifi"]["passphrase"]
@@ -107,59 +112,21 @@ class Sensei:
         if self.udp_logger:
             self.udp_logger.log_msg(msg, *args)
 
-    def mqtt_callback(self, topic, msg):
+    def mqtt_callback(self, topic=None, msg=None):
         self.print("Received MQTT message:", topic, msg)
 
     def connect_wifi(self, force=False):
         if not self.has_wifi:
             return
+        raise NotImplementedError
 
-        import network
-
-        if force:
-            self.sta_if = None
-
-        if not self.sta_if:
-            self.sta_if = network.WLAN(network.STA_IF)
-            self.sta_if.active(True)
-
-        if not self.wifi_ssid:
-            raise ValueError("WiFi is not configured")
-
-        if not self.sta_if.isconnected():
-            print("Not connected, scanning...")
-            scan_res = self.sta_if.scan()
-            if scan_res:
-                for net in scan_res:
-                    print(" - ", net)
-
-            print("Connecting to WiFi: " + self.wifi_ssid)
-            self.sta_if.connect(self.wifi_ssid, self.wifi_passphrase)
-            while not self.sta_if.isconnected():
-                sleep_ms(500)
-
-            print("WiFi connected")
-
-            # Set unlimited WiFi reconnect attempts
-            self.sta_if.config(reconnects=-1)
-
-        print("WiFi status:", self.sta_if.status())
-        print("WiFi ifconfig:", self.sta_if.ifconfig())
+    def check_wifi_ok(self):
+        if not self.has_wifi:
+            return
+        raise NotImplementedError
 
     def create_mqtt_client(self):
-        # https://notebook.community/Wei1234c/Elastic_Network_of_Things_with_MQTT_and_MicroPython/notebooks/test/MQTT%20client%20test%20-%20MicroPython
-        client = MQTTClient(
-            f"esp32_client/{self.mqtt_sensor_id}",
-            self.mqtt_broker,
-            self.mqtt_port,
-            keepalive=60,
-            ssl=False,
-            ssl_params={},
-        )
-        client.set_callback(self.mqtt_callback)
-        client.connect()
-        client.subscribe(self.mqtt_topic_sub)
-        return client
+        raise NotImplementedError
 
     def connect_mqtt(self):
         self.mqtt_client = self.create_mqtt_client()
@@ -168,7 +135,7 @@ class Sensei:
         self.print("\nConnecting sensors")
         try:
             self.print(" - Connecting SGP30")
-            self.sgp30 = sgp30_factory(self.i2c, measure_test=True, iaq_init=False) if HAS_SGP30 else None
+            self.sgp30 = sgp30_factory(self.i2c, measure_test=True, iaq_init=False) if self.has_sgp30 else None
             if self.sgp30:
                 # self.sgp30.set_iaq_baseline(0x8973, 0x8AAE)
                 self.sgp30.set_iaq_relative_humidity(26, 45)
@@ -177,17 +144,17 @@ class Sensei:
                 self.print("SGP30 not connected")
 
             self.print("\n - Connecting AHT21")
-            self.aht21 = ahtx0_factory(self.i2c) if HAS_AHT else None
+            self.aht21 = ahtx0_factory(self.i2c) if self.has_aht else None
             if not self.aht21:
                 self.print("AHT21 not connected")
 
             self.print("\n - Connecting CCS811")
-            self.ccs811 = css811_factory(self.i2c) if HAS_CCS811 else None
+            self.ccs811 = css811_factory(self.i2c) if self.has_ccs811 else None
             if not self.ccs811:
                 self.print("CCS811 not connected")
 
             self.print("\n - Connecting SCD40")
-            self.scd4x = scd4x_factory(self.i2c) if HAS_SCD4X else None
+            self.scd4x = scd4x_factory(self.i2c) if self.has_scd4x else None
             if self.scd4x:
                 self.scd4x.start_periodic_measurement()
             else:
@@ -211,7 +178,7 @@ class Sensei:
                 cal_temp = self.temp
                 cal_hum = self.humd
 
-            if cal_temp and cal_hum and utime.time() - self.last_tsync > 180:
+            if cal_temp and cal_hum and time.time() - self.last_tsync > 180:
                 if self.sgp30:
                     try_fnc(lambda: self.sgp30.set_iaq_relative_humidity(cal_temp, cal_hum))
                     pass
@@ -220,7 +187,7 @@ class Sensei:
                     try_fnc(lambda: self.ccs811.set_environmental_data(cal_hum, cal_temp))
                     pass
 
-                self.last_tsync = utime.time()
+                self.last_tsync = time.time()
                 self.print("Temp sync", cal_temp, cal_hum)
 
         except Exception as e:
@@ -326,7 +293,7 @@ class Sensei:
         self.publish_co2()
 
     def publish_common(self):
-        t = utime.time()
+        t = time.time()
         if t - self.last_pub <= 60:
             return
 
@@ -343,7 +310,7 @@ class Sensei:
         if not self.scd4x:
             return
 
-        t = utime.time()
+        t = time.time()
         if t - self.last_pub_sgp > 60 and self.scd40_co2 is not None and self.scd40_co2 > 0:
             try:
                 self.publish_scd40()
@@ -352,8 +319,7 @@ class Sensei:
                 self.print("Error in pub:", e)
 
     def publish_msg(self, topic: str, message: str):
-        self.mqtt_client.publish(topic, message)
-        self.print(f"Published {topic}:", message)
+        raise NotImplementedError
 
     def publish_payload(self, topic: str, payload: dict):
         self.publish_msg(topic, json.dumps(payload))
@@ -420,48 +386,13 @@ class Sensei:
             },
         )
 
-    def check_wifi_ok(self):
-        """
-        Possible WiFi statuses:
-            * ``STAT_IDLE`` -- no connection and no activity,
-            * ``STAT_CONNECTING`` -- connecting in progress,
-            * ``STAT_WRONG_PASSWORD`` -- failed due to incorrect password,
-            * ``STAT_NO_AP_FOUND`` -- failed because no access point replied,
-            * ``STAT_CONNECT_FAIL`` -- failed due to other problems,
-            * ``STAT_GOT_IP`` -- connection successful.
-        :return:
-        """
-        if not self.has_wifi:
-            return
-
-        import network
-
-        try:
-            if not self.sta_if.isconnected():
-                raise ValueError("WiFi not connected")
-
-            wifi_status = self.sta_if.status()
-            is_connected = wifi_status == network.STAT_GOT_IP
-            if is_connected:
-                return
-
-            t = utime.time()
-            is_connecting = wifi_status == network.STAT_CONNECTING
-            if is_connecting and t - self.last_wifi_reconnect < 180:
-                return
-
-            try_fnc(lambda: self.sta_if.disconnect())
-
-        except Exception as e:
-            self.print("Network exception: ", e)
-
-        # When control flow gets here - reconnect
+    def on_wifi_reconnect(self):
         self.print("WiFi Reconnecting")
         self.connect_wifi(force=True)
         self.maybe_reconnect_mqtt(force=True)
 
     def maybe_reconnect_mqtt(self, force=False):
-        t = utime.time()
+        t = time.time()
 
         if not force and (self.mqtt_client is not None and t - self.last_reconnect < 60 * 3):
             return
@@ -477,8 +408,7 @@ class Sensei:
             self.print("MQTT connection error:", e)
 
     def start_bus(self):
-        self.i2c = machine.SoftI2C(scl=machine.Pin(SPG30_SCL_PIN), sda=machine.Pin(SPG30_SDA_PIN))
-        self.i2c.start()
+        raise NotImplementedError
 
     def main(self):
         print("Starting bus")
