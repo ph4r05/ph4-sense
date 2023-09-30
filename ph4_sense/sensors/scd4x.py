@@ -20,7 +20,7 @@ if not _SCD40X_IMPORTED:
 if not _SCD40X_IMPORTED:
     assert SCD4X is Any
     try:
-        from ph4_esp32.sensors.scd4x_mp import SCD4X, SCD4X_DEFAULT_ADDR  # noqa: F811
+        from ph4_sense.sensors.scd4x_mp import SCD4X, SCD4X_DEFAULT_ADDR  # noqa: F811
 
         _SCD40X_IMPORTED = True
     except ImportError as e:

@@ -19,7 +19,7 @@ if not _AHTX0_IMPORTED:
 if not _AHTX0_IMPORTED:
     assert AHTx0 is Any
     try:
-        from ph4_esp32.sensors.athx0_mp import AHTx0
+        from ph4_sense.sensors.athx0_mp import AHTx0
 
         _AHTX0_IMPORTED = True
     except ImportError as e:

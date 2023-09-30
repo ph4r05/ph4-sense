@@ -1,8 +1,8 @@
 from machine import I2C
 
-from ph4_esp32.adapters import const
-from ph4_esp32.sensors.ccs811_mp_base import CCS811
-from ph4_esp32.sensors.ccs811base import CCS811Wrapper
+from ph4_sense.adapters import const
+from ph4_sense.sensors.ccs811_mp_base import CCS811
+from ph4_sense.sensors.ccs811base import CCS811Wrapper
 
 try:
     from typing import Optional

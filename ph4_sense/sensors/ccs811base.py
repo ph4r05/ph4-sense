@@ -1,5 +1,5 @@
-from ph4_esp32.adapters import const
-from ph4_esp32.sensors.common import ccs811_err_to_str
+from ph4_sense.adapters import const
+from ph4_sense.sensors.common import ccs811_err_to_str
 
 try:
     from typing import Optional, Tuple

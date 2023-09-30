@@ -34,7 +34,7 @@ from machine import I2C
 from micropython import const
 from utime import sleep_ms
 
-from ph4_esp32.sensors.common import ccs811_err_to_str
+from ph4_sense.sensors.common import ccs811_err_to_str
 
 try:
     from typing import NoReturn, Optional

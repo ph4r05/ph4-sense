@@ -3,7 +3,7 @@ import busio
 import paho.mqtt.client as mqtt  # paho-mqtt
 from ph4monitlib.utils import load_config_file
 
-from ph4_esp32.sense import Sensei
+from ph4_sense.sense import Sensei
 
 
 class SenseiPy(Sensei):

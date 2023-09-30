@@ -1,11 +1,11 @@
-from ph4_esp32.adapters import json, sleep_ms, time
-from ph4_esp32.filters import ExpAverage, SensorFilter
-from ph4_esp32.sensors.athx0 import ahtx0_factory
-from ph4_esp32.sensors.ccs811 import CCS811Custom, css811_factory
-from ph4_esp32.sensors.scd4x import scd4x_factory
-from ph4_esp32.sensors.sgp30 import sgp30_factory
-from ph4_esp32.udplogger import UdpLogger
-from ph4_esp32.utils import dval, try_fnc
+from ph4_sense.adapters import json, sleep_ms, time
+from ph4_sense.filters import ExpAverage, SensorFilter
+from ph4_sense.sensors.athx0 import ahtx0_factory
+from ph4_sense.sensors.ccs811 import CCS811Custom, css811_factory
+from ph4_sense.sensors.scd4x import scd4x_factory
+from ph4_sense.sensors.sgp30 import sgp30_factory
+from ph4_sense.udplogger import UdpLogger
+from ph4_sense.utils import dval, try_fnc
 
 
 class Sensei:

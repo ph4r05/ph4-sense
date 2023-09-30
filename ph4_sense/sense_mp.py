@@ -2,9 +2,9 @@ import machine
 import network
 from umqtt.robust import MQTTClient
 
-from ph4_esp32.adapters import sleep_ms, time
-from ph4_esp32.sense import Sensei
-from ph4_esp32.utils import try_fnc
+from ph4_sense.adapters import sleep_ms, time
+from ph4_sense.sense import Sensei
+from ph4_sense.utils import try_fnc
 
 # Set up your SPG30 sensor pin connections
 # https://randomnerdtutorials.com/esp32-i2c-communication-arduino-ide/

@@ -4,7 +4,7 @@ except ImportError:
     Any = str
 
 
-from ph4_esp32.sensors.ccs811base import CCS811Custom
+from ph4_sense.sensors.ccs811base import CCS811Custom
 
 _CCS811_IMPORTED = False
 CSS811Adapter = Any
@@ -12,7 +12,7 @@ CSS811Adapter = Any
 # Machine-dependent import
 if not _CCS811_IMPORTED:
     try:
-        from ph4_esp32.sensors.ccs811_ada import AdaCCS811 as CSS811Adapter
+        from ph4_sense.sensors.ccs811_ada import AdaCCS811 as CSS811Adapter
 
         _CCS811_IMPORTED = True
     except ImportError:
@@ -21,7 +21,7 @@ if not _CCS811_IMPORTED:
 if not _CCS811_IMPORTED:
     assert CSS811Adapter is Any
     try:
-        from ph4_esp32.sensors.ccs811_mp import MicroCCS811 as CSS811Adapter
+        from ph4_sense.sensors.ccs811_mp import MicroCCS811 as CSS811Adapter
 
         _CCS811_IMPORTED = True
     except ImportError as e:

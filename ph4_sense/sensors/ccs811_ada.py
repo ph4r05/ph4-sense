@@ -3,8 +3,8 @@ from typing import Optional
 import adafruit_ccs811
 import busio
 
-from ph4_esp32.adapters import const
-from ph4_esp32.sensors.ccs811base import CCS811Wrapper
+from ph4_sense.adapters import const
+from ph4_sense.sensors.ccs811base import CCS811Wrapper
 
 _ALG_RESULT_DATA = const(0x02)
 

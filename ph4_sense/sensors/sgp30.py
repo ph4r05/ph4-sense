@@ -20,7 +20,7 @@ if not _SGP30_IMPORTED:
 if not _SGP30_IMPORTED:
     assert SGP30 is Any
     try:
-        from ph4_esp32.sensors.sgp30_mp import SGP30
+        from ph4_sense.sensors.sgp30_mp import SGP30
 
         _SGP30_IMPORTED = True
         _SGP30_IMPORTED_MP = True
