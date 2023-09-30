@@ -22,8 +22,8 @@ if not _AHTX0_IMPORTED:
         from ph4_esp32.sensors.athx0_mp import AHTx0
 
         _AHTX0_IMPORTED = True
-    except ImportError:
-        pass
+    except ImportError as e:
+        print("AHTx0 import error:", e)
 
 
 def ahtx0_factory(bus, address: int = 0x38) -> Optional[AHTx0]:

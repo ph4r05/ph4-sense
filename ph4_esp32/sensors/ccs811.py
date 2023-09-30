@@ -24,8 +24,8 @@ if not _CCS811_IMPORTED:
         from ph4_esp32.sensors.ccs811_mp import MicroCCS811 as CSS811Adapter
 
         _CCS811_IMPORTED = True
-    except ImportError:
-        pass
+    except ImportError as e:
+        print("CCS811 import error:", e)
 
 
 def css811_factory(bus, address: int = 0x5A) -> Optional[CCS811Custom]:

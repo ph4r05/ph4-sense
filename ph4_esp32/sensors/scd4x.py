@@ -23,8 +23,8 @@ if not _SCD40X_IMPORTED:
         from ph4_esp32.sensors.scd4x_mp import SCD4X, SCD4X_DEFAULT_ADDR  # noqa: F811
 
         _SCD40X_IMPORTED = True
-    except ImportError:
-        pass
+    except ImportError as e:
+        print("SCD40X import error:", e)
 
 
 def scd4x_factory(bus, address: int = SCD4X_DEFAULT_ADDR) -> Optional[SCD4X]:

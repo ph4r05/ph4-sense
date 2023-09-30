@@ -173,17 +173,25 @@ class Sensei:
                 # self.sgp30.set_iaq_baseline(0x8973, 0x8AAE)
                 self.sgp30.set_iaq_relative_humidity(26, 45)
                 self.sgp30.iaq_init()
+            else:
+                self.print("SGP30 not connected")
 
             self.print("\n - Connecting AHT21")
             self.aht21 = ahtx0_factory(self.i2c) if HAS_AHT else None
+            if not self.aht21:
+                self.print("AHT21 not connected")
 
             self.print("\n - Connecting CCS811")
             self.ccs811 = css811_factory(self.i2c) if HAS_CCS811 else None
+            if not self.ccs811:
+                self.print("CCS811 not connected")
 
             self.print("\n - Connecting SCD40")
             self.scd4x = scd4x_factory(self.i2c) if HAS_SCD4X else None
             if self.scd4x:
                 self.scd4x.start_periodic_measurement()
+            else:
+                self.print("SCD4x not connected")
 
             self.print("\nSensors connected")
         except Exception as e:

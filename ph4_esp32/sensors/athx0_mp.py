@@ -28,11 +28,14 @@ Implementation Notes
   https://github.com/adafruit/Adafruit_CircuitPython_BusDevice
 
 """
-from typing import Optional
-
 from machine import I2C
 from micropython import const
 from utime import sleep_ms
+
+try:
+    from typing import Optional
+except ImportError:
+    pass
 
 __version__: str = "1.0.17"
 __repo__: str = "https://github.com/adafruit/Adafruit_CircuitPython_AHTx0.git"

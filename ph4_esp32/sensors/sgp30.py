@@ -24,8 +24,8 @@ if not _SGP30_IMPORTED:
 
         _SGP30_IMPORTED = True
         _SGP30_IMPORTED_MP = True
-    except ImportError:
-        pass
+    except ImportError as e:
+        print("SGP32 import error:", e)
 
 
 def sgp30_factory(bus, address: int = 0x58, **kwargs) -> Optional[SGP30]:

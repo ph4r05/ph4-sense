@@ -46,10 +46,15 @@ Implementation Notes
 """
 
 from math import exp
-from typing import Union
 
 from micropython import const
 from utime import sleep_ms
+
+try:
+    from typing import Union
+except ImportError:
+    pass
+
 
 # General SGP30 settings
 SGP30_DEFAULT_I2C_ADDR = const(0x58)
