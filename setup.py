@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import find_packages, setup
 
 version = "0.0.1"
 
@@ -69,7 +69,7 @@ setup(
         "Programming Language :: Python",
         "Programming Language :: Python :: 3.10",
     ],
-    packages=["ph4_sense"],
+    packages=find_packages(include=["ph4_sense", "ph4_sense.*"]),
     include_package_data=True,
     install_requires=install_requires,
     extras_require={

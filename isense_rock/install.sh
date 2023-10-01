@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-set -ex
 
+# may exist already
+useradd -r -M -G ph4sense -s /usr/sbin/nologin -c "System User for ph4sense" ph4sense
+sudo usermod -aG i2c ph4sense
+
+set -ex
 cd "${SCRIPT_DIR}"
 MDIR="/etc/ph4sense"
 mkdir -p "${MDIR}"
@@ -12,6 +16,10 @@ chown ph4sense:ph4sense "${MDIR}/config.yaml"
 
 cp ph4sense.sh "${MDIR}"
 chmod 0755 "${MDIR}/ph4sense.sh"
+
+cp ph4sense.py /usr/local/bin/ph4-sensei-loc
+chmod 0755 "/usr/local/bin/ph4-sensei-loc"
+chown ph4sense:ph4sense "/usr/local/bin/ph4-sensei-loc"
 
 touch /var/log/ph4sense.json
 chown ph4sense:ph4sense /var/log/ph4sense.json

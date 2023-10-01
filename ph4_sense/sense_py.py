@@ -2,7 +2,6 @@ import argparse
 import logging
 import sys
 
-import board  # adafruit-blinka
 import busio
 import coloredlogs
 import paho.mqtt.client as mqtt  # paho-mqtt
@@ -23,8 +22,8 @@ class SenseiPy(Sensei):
         has_sgp30=True,
         has_ccs811=True,
         has_scd4x=True,
-        scl_pin=board.SCL7,
-        sda_pin=board.SDA7,
+        scl_pin=None,
+        sda_pin=None,
         config_file=None,
     ):
         super().__init__(

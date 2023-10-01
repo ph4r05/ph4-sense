@@ -1,2 +1,2 @@
 #!/usr/bin/env sh
-exec /usr/local/bin/ph4-sensei -c /etc/ph4sense/config.yaml $*
+exec python3.10 /usr/local/bin/ph4-sensei-loc -c /etc/ph4sense/config.yaml $*
