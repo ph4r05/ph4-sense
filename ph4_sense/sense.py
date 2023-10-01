@@ -13,9 +13,6 @@ except ImportError:
     pass
 
 
-logger = getLogger(__name__)
-
-
 class Sensei:
     def __init__(
         self,
@@ -91,6 +88,7 @@ class Sensei:
         self.aht21 = None
         self.ccs811 = None
         self.scd4x = None
+        self.logger = None
 
     def set_sensor_id(self, sensor_id):
         self.mqtt_sensor_id = sensor_id or ""
@@ -249,8 +247,8 @@ class Sensei:
 
         except Exception as e:
             self.print("SGP30 err:", e)
-            logger.error("SGP30 err: {}".format(e))
-            logger.debug("SGP30 err: {}".format(e), exc_info=e)
+            self.logger.error("SGP30 err: {}".format(e))
+            self.logger.debug("SGP30 err: {}".format(e), exc_info=e)
             return
 
     def measure_ccs811(self):
@@ -292,8 +290,8 @@ class Sensei:
                 )
         except Exception as e:
             self.print("CCS error: ", e)
-            logger.error("CCS err: {}".format(e))
-            logger.debug("CCS err: {}".format(e), exc_info=e)
+            self.logger.error("CCS err: {}".format(e))
+            self.logger.debug("CCS err: {}".format(e), exc_info=e)
             return
 
     def measure_scd4x(self):
@@ -306,8 +304,8 @@ class Sensei:
                 self.scd40_hum = self.scd4x.relative_humidity
         except Exception as e:
             self.print("Err SDC40: ", e)
-            logger.error("SDC40 err: {}".format(e))
-            logger.debug("SDC40 err: {}".format(e), exc_info=e)
+            self.logger.error("SDC40 err: {}".format(e))
+            self.logger.debug("SDC40 err: {}".format(e), exc_info=e)
             return
 
     def update_metrics(self):
@@ -474,7 +472,12 @@ class Sensei:
 
         self.publish()
 
+    def base_init(self):
+        self.logger = getLogger(__name__)
+
     def init_connections(self):
+        self.base_init()
+
         print("Starting bus")
         self.start_bus()
 
