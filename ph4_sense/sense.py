@@ -137,7 +137,13 @@ class Sensei:
                 self.has_scd4x = True
 
     def print(self, msg, *args):
+        self.print_cli(msg, *args)
+        self.print_logger(msg, *args)
+
+    def print_cli(self, msg, *args):
         print(msg, *args)
+
+    def print_logger(self, msg, *args):
         if self.udp_logger:
             self.udp_logger.log_msg(msg, *args)
 
