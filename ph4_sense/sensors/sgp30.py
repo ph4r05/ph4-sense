@@ -11,7 +11,7 @@ SGP30 = Any
 # Machine-dependent import
 if not _SGP30_IMPORTED:
     try:
-        from adafruit_sgp30 import Adafruit_SGP30 as SGP30  # type: ignore
+        from ph4_sense.sensors.sgp30_ada import AdaSGP30 as SGP30  # type: ignore
 
         _SGP30_IMPORTED = True
     except ImportError:

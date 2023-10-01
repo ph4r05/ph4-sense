@@ -25,3 +25,6 @@ class AdaCCS811(CCS811Wrapper):
 
     def get_error_code(self) -> int:
         return self._sensor.error_code
+
+    def get_error(self):
+        return self._sensor.error

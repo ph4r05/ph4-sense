@@ -131,7 +131,7 @@ class Sensei:
                 self.has_sgp30 = True
             elif sensor in ("aht", "ahtx0", "aht21"):
                 self.has_aht = True
-            elif sensor in ("css811", "css"):
+            elif sensor in ("ccs811", "ccs"):
                 self.has_ccs811 = True
             elif sensor in ("scd4x", "scd41", "scd40"):
                 self.has_scd4x = True
@@ -275,7 +275,7 @@ class Sensei:
                     + f"Fw: {int(dval(self.ccs811.fw_mode.get()))} Dm: {self.ccs811.drive_mode.get()}"
                 )
 
-            if self.ccs811.error.get():
+            if self.ccs811.get_error():
                 self.print(f"Err: {self.ccs811.r_error} = {CCS811Custom.err_to_str(self.ccs811.r_error)}")
         except Exception as e:
             self.print("CCS error: ", e)

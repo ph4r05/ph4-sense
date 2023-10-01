@@ -8,21 +8,26 @@ except ImportError:
     pass
 
 
-class CCS811Wrapper:
-    def __init__(self, sensor):
-        self._sensor = sensor
-
-    def __getattr__(self, name):
-        return getattr(self._sensor, name)
-
+class ICSS811:
     def read_sensor_buf(self) -> Optional[bytes]:
         raise NotImplementedError
 
     def get_error_code(self) -> int:
         raise NotImplementedError
 
+    def get_error(self) -> bool:
+        raise NotImplementedError
 
-class CCS811Custom:
+
+class CCS811Wrapper(ICSS811):
+    def __init__(self, sensor):
+        self._sensor = sensor
+
+    def __getattr__(self, name):
+        return getattr(self._sensor, name)
+
+
+class CCS811Custom(ICSS811):
     MAX_TVOC = const(32_768)
     MAX_CO2 = const(29_206)
 
@@ -44,6 +49,15 @@ class CCS811Custom:
 
     def __getattr__(self, name):
         return getattr(self._sensor, name)
+
+    def read_sensor_buf(self) -> Optional[bytes]:
+        return self._sensor.read_sensor_buf()
+
+    def get_error_code(self) -> int:
+        return self._sensor.get_error_code()
+
+    def get_error(self) -> bool:
+        return self._sensor.get_error()
 
     def reset_r(self):
         self.r_status = None
@@ -102,7 +116,7 @@ class CCS811Custom:
         else:
             self.r_stat_str += "R- "  # FW_MODE, 1 = ready to measure
 
-        if self.error.get():
+        if self._sensor.get_error():
             self.r_error = self._sensor.get_error_code()
             self.r_err_str = CCS811Custom.err_to_str(self.r_error)
             raise RuntimeError(f"Error: {str(self.r_error)} [{self.r_err_str}]")
