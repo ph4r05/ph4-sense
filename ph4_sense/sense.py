@@ -285,7 +285,7 @@ class Sensei:
                 self.print(f"Err: {self.ccs811.r_error} = {CCS811Custom.err_to_str(self.ccs811.r_error)}")
         except Exception as e:
             self.print("CCS error: ", e)
-            raise
+            return
 
     def measure_scd4x(self):
         if not self.scd4x:
