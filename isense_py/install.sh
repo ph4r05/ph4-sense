@@ -22,7 +22,9 @@ chmod 0755 "/usr/local/bin/ph4-sensei-loc"
 chown ph4sense:ph4sense "/usr/local/bin/ph4-sensei-loc"
 
 touch /var/log/ph4sense.json
+touch /var/log/ph4sense.log
 chown ph4sense:ph4sense /var/log/ph4sense.json
+chown ph4sense:ph4sense /var/log/ph4sense.log
 
 cp ph4sense.service /etc/systemd/system/ph4sense.service
 systemctl daemon-reload

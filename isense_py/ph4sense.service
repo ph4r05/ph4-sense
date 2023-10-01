@@ -9,8 +9,8 @@ After=nut-server.service
 [Service]
 User=ph4sense
 Group=ph4sense
-WorkingDirectory=~
-RuntimeDirectory=~
+WorkingDirectory=/tmp
+RuntimeDirectory=/tmp
 
 Type=simple
 Environment=DNS_PUBLIC=tcp
