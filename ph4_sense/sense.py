@@ -59,9 +59,9 @@ class Sensei:
         self.ccs_co2 = 0
         self.ccs_tvoc = 0
         self.eavg = ExpAverage(0.1)
-        self.eavg_css811_co2 = SensorFilter(median_window=7, alpha=0.2)
+        self.eavg_css811_co2 = SensorFilter(median_window=9, alpha=0.2)
         self.eavg_sgp30_co2 = SensorFilter(median_window=5, alpha=0.2)
-        self.eavg_css811_tvoc = SensorFilter(median_window=7, alpha=0.2)
+        self.eavg_css811_tvoc = SensorFilter(median_window=9, alpha=0.2)
         self.eavg_sgp30_tvoc = SensorFilter(median_window=5, alpha=0.2)
 
         self.last_ccs811_co2 = 0
