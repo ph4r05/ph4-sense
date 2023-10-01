@@ -272,7 +272,7 @@ class Sensei:
                     + f"status: {self.ccs811.r_status}, "
                     + f"error id: {self.ccs811.r_error_id} = [{self.ccs811.r_err_str}] [{self.ccs811.r_stat_str}], "
                     + f"raw I={self.ccs811.r_raw_current} uA, U={dval(self.ccs811.r_raw_adc):.5f} V, "
-                    + f"Fw: {int(dval(self.ccs811.fw_mode.get()))} Dm: {self.ccs811.drive_mode.get()}"
+                    + f"Fw: {int(dval(self.ccs811.get_fw_mode()))} Dm: {self.ccs811.get_drive_mode()}"
                 )
 
             if self.ccs811.get_error():

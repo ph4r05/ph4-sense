@@ -27,5 +27,11 @@ class MicroCCS811(CCS811Wrapper):
     def get_error_code(self) -> int:
         return self._sensor.error_code
 
-    def get_error(self):
+    def get_error(self) -> bool:
         return self._sensor.error.get()
+
+    def get_fw_mode(self) -> bool:
+        return self._sensor.fw_mode.get()
+
+    def get_drive_mode(self) -> int:
+        return self._sensor.drive_mode.get()

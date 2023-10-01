@@ -18,6 +18,12 @@ class ICSS811:
     def get_error(self) -> bool:
         raise NotImplementedError
 
+    def get_fw_mode(self) -> bool:
+        raise NotImplementedError
+
+    def get_drive_mode(self) -> int:
+        raise NotImplementedError
+
 
 class CCS811Wrapper(ICSS811):
     def __init__(self, sensor):
@@ -58,6 +64,12 @@ class CCS811Custom(ICSS811):
 
     def get_error(self) -> bool:
         return self._sensor.get_error()
+
+    def get_fw_mode(self) -> bool:
+        return self._sensor.get_fw_mode()
+
+    def get_drive_mode(self) -> int:
+        return self._sensor.get_drive_mode()
 
     def reset_r(self):
         self.r_status = None
