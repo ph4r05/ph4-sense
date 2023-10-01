@@ -15,9 +15,14 @@ try:
             return None
 
     DUMMY_LOGGER = DummyLogger()
+    MAIN_LOGGER = DUMMY_LOGGER
 
     def getLogger(name):
-        return DUMMY_LOGGER
+        return MAIN_LOGGER
+
+    def updateLogger(logger):
+        global MAIN_LOGGER
+        MAIN_LOGGER = logger
 
 except ImportError:
     import json  # type: ignore # noqa: F401
@@ -33,3 +38,6 @@ except ImportError:
 
     def getLogger(name):
         return logging.getLogger(name)
+
+    def updateLogger(logger):
+        return None  # does nothing, not supported outside ESP32

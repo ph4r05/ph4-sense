@@ -2,7 +2,8 @@ import machine
 import network
 from umqtt.robust import MQTTClient
 
-from ph4_sense.adapters import sleep_ms, time
+from ph4_sense.adapters import sleep_ms, time, updateLogger
+from ph4_sense.logger_mp import MpLogger
 from ph4_sense.sense import Sensei
 from ph4_sense.utils import try_fnc
 
@@ -34,6 +35,15 @@ class SenseiMp(Sensei):
             scl_pin=scl_pin,
             sda_pin=sda_pin,
         )
+
+        updateLogger(MpLogger(self.log_fnc))
+
+    def log_fnc(self, level, msg, *args, **kwargs):
+        if level < 20:  # do not log debug events
+            return
+
+        msg_use = msg if not args else msg % args
+        self.print("log[{}]: {}".format(level, msg_use))
 
     def start_bus(self):
         self.i2c = machine.SoftI2C(scl=machine.Pin(self.scl_pin), sda=machine.Pin(self.sda_pin))

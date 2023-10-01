@@ -14,7 +14,7 @@ logger = getLogger(__name__)
 class FixedCCS811(adafruit_ccs811.CCS811):
     def __init__(self, i2c_bus: busio.I2C, address: int = 0x5A) -> None:
         # Unfortunately, we cannot use adafruit constructor as device-error when init causes us to
-        # raise an exception, without possibility to recover. It is unnaceptable to ask for power cycle.
+        # raise an exception, without possibility to recover. It is unacceptable to ask for power cycle.
         # super().__init__(i2c_bus, address)
 
         self.i2c_device = I2CDevice(i2c_bus, address)

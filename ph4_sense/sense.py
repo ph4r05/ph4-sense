@@ -1,4 +1,4 @@
-from ph4_sense.adapters import json, sleep_ms, time
+from ph4_sense.adapters import getLogger, json, sleep_ms, time
 from ph4_sense.filters import ExpAverage, SensorFilter
 from ph4_sense.sensors.athx0 import ahtx0_factory
 from ph4_sense.sensors.ccs811 import CCS811Custom, css811_factory
@@ -11,6 +11,9 @@ try:
     from typing import List
 except ImportError:
     pass
+
+
+logger = getLogger(__name__)
 
 
 class Sensei:
@@ -246,6 +249,8 @@ class Sensei:
 
         except Exception as e:
             self.print("SGP30 err:", e)
+            logger.error("SGP30 err: {}".format(e))
+            logger.debug("SGP30 err: {}".format(e), exc_info=e)
             return
 
     def measure_ccs811(self):
@@ -285,6 +290,8 @@ class Sensei:
                 self.print(f"Err: {self.ccs811.r_error} = {CCS811Custom.err_to_str(self.ccs811.r_error)}")
         except Exception as e:
             self.print("CCS error: ", e)
+            logger.error("CCS err: {}".format(e))
+            logger.debug("CCS err: {}".format(e), exc_info=e)
             return
 
     def measure_scd4x(self):
@@ -297,6 +304,9 @@ class Sensei:
                 self.scd40_hum = self.scd4x.relative_humidity
         except Exception as e:
             self.print("Err SDC40: ", e)
+            logger.error("SDC40 err: {}".format(e))
+            logger.debug("SDC40 err: {}".format(e), exc_info=e)
+            return
 
     def update_metrics(self):
         try:
