@@ -2,10 +2,11 @@ import socket
 
 
 class UdpLogger:
-    def __init__(self, host):
+    def __init__(self, host, is_esp32=True):
         self.host = "localhost", 9999
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.set_host(host)
+        self.is_esp32 = is_esp32
 
     def set_host(self, host):
         parts = str(host).rsplit(":", 1)
@@ -21,7 +22,10 @@ class UdpLogger:
                 log_line += " " + (" ".join(map(str, args)))
             log_line += "\n"
 
-            self.socket.sendto(log_line, self.host)
+            if self.is_esp32:
+                self.socket.sendto(log_line, self.host)
+            else:
+                self.socket.sendto(log_line.encode("utf8"), self.host)
 
         except Exception as e:
             print("Could not send", e)

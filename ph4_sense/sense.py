@@ -112,7 +112,7 @@ class Sensei:
             self.has_mqtt = True
 
         if "udpLogger" in js:
-            self.udp_logger = UdpLogger(js["udpLogger"])
+            self.udp_logger = UdpLogger(js["udpLogger"], is_esp32=self.is_esp32)
 
         if "sensorId" in js:
             self.set_sensor_id(js["sensorId"])
