@@ -7,3 +7,8 @@ mqtt:
 
 udpLogger: "192.168.0.1:9998"
 sensorId: "livroom"
+sensors:
+  - ccs811
+  - aht21
+  - sgp30
+  - scd40

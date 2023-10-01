@@ -8,6 +8,10 @@
 			"path": "."
 		},
 		{
+			"name": "ph4_sense",
+			"path": "ph4_sense"
+		},
+		{
 			"name": "serial://dev/tty.usbserial-0001",
 			"uri": "serial:///dev/tty.usbserial-0001/"
 		},

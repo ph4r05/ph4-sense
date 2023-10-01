@@ -7,6 +7,11 @@ from ph4_sense.sensors.sgp30 import sgp30_factory
 from ph4_sense.udplogger import UdpLogger
 from ph4_sense.utils import dval, try_fnc
 
+try:
+    from typing import List
+except ImportError:
+    pass
+
 
 class Sensei:
     def __init__(
@@ -106,6 +111,26 @@ class Sensei:
 
         if "sensorId" in js:
             self.set_sensor_id(js["sensorId"])
+
+        if "sensors" in js:
+            self.load_config_sensors(js["sensors"])
+
+    def load_config_sensors(self, sensors: List[str]):
+        self.has_aht = False
+        self.has_sgp30 = False
+        self.has_ccs811 = False
+        self.has_scd4x = False
+
+        for sensor in sensors:
+            sensor = sensor.lower()
+            if sensor in ("sgp30", "spg30"):
+                self.has_sgp30 = True
+            elif sensor in ("aht", "ahtx0", "aht21"):
+                self.has_aht = True
+            elif sensor in ("css811", "css"):
+                self.has_ccs811 = True
+            elif sensor in ("scd4x", "scd41", "scd40"):
+                self.has_scd4x = True
 
     def print(self, msg, *args):
         print(msg, *args)
