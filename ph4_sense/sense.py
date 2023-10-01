@@ -65,10 +65,14 @@ class Sensei:
         self.last_ccs811_tvoc = 0
         self.last_sgp30_co2 = 0
         self.last_sgp30_tvoc = 0
-        self.last_tsync = 0
         self.scd40_co2 = None
         self.scd40_temp = None
         self.scd40_hum = None
+
+        self.temp_sync_timeout = 60
+        self.mqtt_reconnect_timeout = 60 * 3
+        self.wifi_reconnect_timeout = 60 * 3
+        self.readings_publish_timeout = 60
 
         self.last_tsync = 0
         self.last_pub = time.time() + 30
@@ -203,7 +207,7 @@ class Sensei:
                 cal_temp = self.temp
                 cal_hum = self.humd
 
-            if cal_temp and cal_hum and time.time() - self.last_tsync > 180:
+            if cal_temp and cal_hum and time.time() - self.last_tsync > self.temp_sync_timeout:
                 if self.sgp30:
                     try_fnc(lambda: self.sgp30.set_iaq_relative_humidity(cal_temp, cal_hum))
                     pass
@@ -319,7 +323,7 @@ class Sensei:
 
     def publish_common(self):
         t = time.time()
-        if t - self.last_pub <= 60:
+        if t - self.last_pub <= self.readings_publish_timeout:
             return
 
         try:
@@ -336,7 +340,7 @@ class Sensei:
             return
 
         t = time.time()
-        if t - self.last_pub_sgp > 60 and self.scd40_co2 is not None and self.scd40_co2 > 0:
+        if t - self.last_pub_sgp > self.readings_publish_timeout and self.scd40_co2 is not None and self.scd40_co2 > 0:
             try:
                 self.publish_scd40()
                 self.last_pub_sgp = t
@@ -419,7 +423,7 @@ class Sensei:
     def maybe_reconnect_mqtt(self, force=False):
         t = time.time()
 
-        if not force and (self.mqtt_client is not None and t - self.last_reconnect < 60 * 3):
+        if not force and (self.mqtt_client is not None and t - self.last_reconnect < self.mqtt_reconnect_timeout):
             return
 
         if self.mqtt_client:

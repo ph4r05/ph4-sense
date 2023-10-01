@@ -98,7 +98,7 @@ class SenseiMp(Sensei):
 
             t = time.time()
             is_connecting = wifi_status == network.STAT_CONNECTING
-            if is_connecting and t - self.last_wifi_reconnect < 180:
+            if is_connecting and t - self.last_wifi_reconnect < self.wifi_reconnect_timeout:
                 return
 
             try_fnc(lambda: self.sta_if.disconnect())
