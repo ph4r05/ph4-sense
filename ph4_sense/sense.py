@@ -286,8 +286,10 @@ class Sensei:
                     + f"Fw: {int(dval(self.ccs811.get_fw_mode()))} Dm: {self.ccs811.get_drive_mode()}"
                 )
 
-            if self.ccs811.get_error():
-                self.print(f"Err: {self.ccs811.r_error} = {CCS811Custom.err_to_str(self.ccs811.r_error)}")
+            if self.ccs811.r_error:
+                self.print(
+                    f"CCS811 logical-err: {self.ccs811.r_error_code} = {CCS811Custom.err_to_str(self.ccs811.r_error_code)}"
+                )
         except Exception as e:
             self.print("CCS error: ", e)
             logger.error("CCS err: {}".format(e))

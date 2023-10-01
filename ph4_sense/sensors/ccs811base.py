@@ -1,4 +1,4 @@
-from ph4_sense.adapters import const
+from ph4_sense.adapters import const, sleep_ms
 from ph4_sense.sensors.common import ccs811_err_to_str
 
 try:
@@ -46,7 +46,8 @@ class CCS811Custom(ICSS811):
         self.r_raw_adc: Optional[float] = None
         self.r_err_str = ""
         self.r_stat_str = ""
-        self.r_error: Optional[int] = None
+        self.r_error: bool = False
+        self.r_error_code: Optional[int] = None
         self.r_overflow = False
         self.r_orig_co2: Optional[int] = None
         self.r_orig_tvoc: Optional[int] = None
@@ -79,7 +80,8 @@ class CCS811Custom(ICSS811):
         self.r_raw_adc = None
         self.r_err_str = ""
         self.r_stat_str = ""
-        self.r_error = None
+        self.r_error = False
+        self.r_error_code = None
         self.r_overflow = False
         self.r_orig_co2 = None
         self.r_orig_tvoc = None
@@ -128,9 +130,14 @@ class CCS811Custom(ICSS811):
         else:
             self.r_stat_str += "R- "  # FW_MODE, 1 = ready to measure
 
+        # Additional post-check. Note: get_error() sends i2c message reading bit register
+        sleep_ms(24)
         if self._sensor.get_error():
-            self.r_error = self._sensor.get_error_code()
-            self.r_err_str = CCS811Custom.err_to_str(self.r_error)
-            raise RuntimeError(f"Error: {str(self.r_error)} [{self.r_err_str}]")
+            self.r_error = True
+            self.r_error_code = self._sensor.get_error_code()
+            self.r_err_str = CCS811Custom.err_to_str(self.r_error_code)
+            raise RuntimeError(f"Error: {str(self.r_error_code)} [{self.r_err_str}]")
+        else:
+            self.r_error = False
 
         return self.r_eco2, self.r_tvoc  # if not self.r_error_id else (None, None)
