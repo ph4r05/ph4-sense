@@ -275,14 +275,7 @@ class Sensei:
 
             if inv_ctr or self.ccs811.r_overflow:
                 flg = (nccs_co2 or 0) & ~0x8000
-                self.print(
-                    f"  CCS inv read {inv_ctr}, orig ({self.ccs811.r_orig_co2} {flg}, "
-                    + f"{self.ccs811.r_orig_tvoc}), "
-                    + f"status: {self.ccs811.r_status}, "
-                    + f"error id: {self.ccs811.r_error_id} = [{self.ccs811.r_err_str}] [{self.ccs811.r_stat_str}], "
-                    + f"raw I={self.ccs811.r_raw_current} uA, U={dval(self.ccs811.r_raw_adc):.5f} V, "
-                    + f"Fw: {int(dval(self.ccs811.get_fw_mode()))} Dm: {self.ccs811.get_drive_mode()}"
-                )
+                raise RuntimeError(f"CCS overflow {inv_ctr}, flg: {flg}, orig co2: {nccs_co2}, tvoc: {nccs_tvoc}")
 
             if self.ccs811.r_error:
                 self.print(
@@ -290,6 +283,18 @@ class Sensei:
                 )
         except Exception as e:
             self.print("CCS error: ", e)
+            try:
+                self.print(
+                    f"  CCS err, orig ({self.ccs811.r_orig_co2}, "
+                    + f"{self.ccs811.r_orig_tvoc}), "
+                    + f"status: {self.ccs811.r_status}, "
+                    + f"error id: {self.ccs811.r_error_id} = [{self.ccs811.r_err_str}] [{self.ccs811.r_stat_str}], "
+                    + f"raw I={self.ccs811.r_raw_current} uA, U={dval(self.ccs811.r_raw_adc):.5f} V, "
+                    + f"Fw: {int(dval(self.ccs811.get_fw_mode()))} Dm: {self.ccs811.get_drive_mode()}"
+                )
+            except Exception:
+                pass
+
             self.logger.error("CCS err: {}".format(e))
             self.logger.debug("CCS err: {}".format(e), exc_info=e)
             return

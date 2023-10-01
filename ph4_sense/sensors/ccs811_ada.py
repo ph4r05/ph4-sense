@@ -4,7 +4,7 @@ import adafruit_ccs811
 import busio
 from adafruit_bus_device.i2c_device import I2CDevice
 
-from ph4_sense.adapters import const, getLogger, time
+from ph4_sense.adapters import const, getLogger, sleep_ms, time
 from ph4_sense.sensors.ccs811base import CCS811Wrapper
 
 _ALG_RESULT_DATA = const(0x02)
@@ -52,9 +52,10 @@ class AdaCCS811(CCS811Wrapper):
         super().__init__(FixedCCS811(i2c_bus, address))
 
     def read_sensor_buf(self) -> Optional[bytes]:
-        if self._sensor.data_ready and self._sensor.app_valid:
+        if self._sensor.data_ready:  # and self._sensor.app_valid
             buf = bytearray(9)
             buf[0] = _ALG_RESULT_DATA
+            sleep_ms(3)
             with self._sensor.i2c_device as i2c:
                 i2c.write_then_readinto(buf, buf, out_end=1, in_start=1)
                 return buf[1:]

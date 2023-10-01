@@ -1,6 +1,6 @@
 from machine import I2C
 
-from ph4_sense.adapters import const
+from ph4_sense.adapters import const, sleep_ms
 from ph4_sense.sensors.ccs811_mp_base import CCS811
 from ph4_sense.sensors.ccs811base import CCS811Wrapper
 
@@ -19,7 +19,8 @@ class MicroCCS811(CCS811Wrapper):
         super().__init__(CCS811(i2c_bus, address))
 
     def read_sensor_buf(self) -> Optional[bytes]:
-        if self._sensor.data_ready.get() and self._sensor.app_valid.get():
+        if self._sensor.data_ready.get():  # and self._sensor.app_valid.get()
+            sleep_ms(3)
             buf = self._sensor._i2c_read_words_from_cmd(_ALG_RESULT_DATA, 20, self._sensor.resp_buf8)
             return buf
         return None

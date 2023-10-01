@@ -99,24 +99,13 @@ class CCS811Custom(ICSS811):
             return None, None
 
         # https://cdn.sparkfun.com/assets/2/c/c/6/5/CN04-2019_attachment_CCS811_Datasheet_v1-06.pdf
-        self.r_orig_co2 = self.r_eco2 = (buf[0] << 8) | (buf[1])  # & ~0x8000
-        self.r_orig_tvoc = self.r_tvoc = (buf[2] << 8) | (buf[3])  # & ~0x8000
+        # Read errors / status first. If error occurred, we cannot process the data
         self.r_status = buf[4]
         self.r_error_id = buf[5]
-        self.r_raw_data = buf[6:8]
-        self.r_raw_current = int((buf[6] & (~0x3)) >> 2)
-        self.r_raw_adc = (1.65 / 1023) * (int(buf[7] & 0x3) << 8 | int(buf[7]))
         self.r_err_str = CCS811Custom.err_to_str(self.r_error_id)
 
-        if self.r_eco2 > CCS811Custom.MAX_CO2:
-            self.r_overflow = True
-            self.r_eco2 = self.r_eco2 & ~0x8000
-
-        if self.r_tvoc > CCS811Custom.MAX_TVOC:
-            self.r_overflow = True
-            self.r_tvoc = self.r_tvoc - CCS811Custom.MAX_TVOC
-
         if self.r_status & 0x1:
+            self.r_error = True
             self.r_stat_str += "Er "  # Error
         if self.r_status & 0x8:
             self.r_stat_str += "Dr "  # Data ready
@@ -130,8 +119,31 @@ class CCS811Custom(ICSS811):
         else:
             self.r_stat_str += "R- "  # FW_MODE, 1 = ready to measure
 
+        # Proceed to normal data processing
+        self.r_orig_co2 = self.r_eco2 = int(((buf[0] & 0xFF) << 8) | (buf[1] & 0xFF))  # & ~0x8000
+        self.r_orig_tvoc = self.r_tvoc = int(((buf[2] & 0xFF) << 8) | (buf[3] & 0xFF))  # & ~0x8000
+        self.r_raw_data = buf[6:8]
+        self.r_raw_current = int((buf[6] & (~0x3)) >> 2)
+        self.r_raw_adc = (1.65 / 1023) * (int(buf[7] & 0x3) << 8 | int(buf[7] & 0xFF))
+
+        if self.r_eco2 > CCS811Custom.MAX_CO2:
+            self.r_overflow = True
+            self.r_eco2 = self.r_eco2 & ~0x8000
+
+        if self.r_tvoc > CCS811Custom.MAX_TVOC:
+            self.r_overflow = True
+            self.r_tvoc = self.r_tvoc - CCS811Custom.MAX_TVOC
+
+        # as per datasheet, meaningful values are on 0..5th bit
+        if (0 < self.r_error_id <= 32) or self.r_error:
+            # Clear error
+            code2 = self._sensor.get_error_code()
+            raise RuntimeError(
+                f"Data read error err_id: {self.r_error_id}=?{code2}; err: [{self.r_err_str}], st: [{self.r_stat_str}]"
+            )
+
         # Additional post-check. Note: get_error() sends i2c message reading bit register
-        sleep_ms(24)
+        sleep_ms(12)
         if self._sensor.get_error():
             self.r_error = True
             self.r_error_code = self._sensor.get_error_code()
