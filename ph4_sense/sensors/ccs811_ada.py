@@ -19,7 +19,7 @@ class AdaCCS811(CCS811Wrapper):
             buf[0] = _ALG_RESULT_DATA
             with self._sensor.i2c_device as i2c:
                 i2c.write_then_readinto(buf, buf, out_end=1, in_start=1)
-                return buf
+                return buf[1:]
 
         return None
 
