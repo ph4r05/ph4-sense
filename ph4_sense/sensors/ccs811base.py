@@ -1,4 +1,4 @@
-from ph4_sense.adapters import const, sleep_ms
+from ph4_sense.adapters import const
 from ph4_sense.sensors.common import ccs811_err_to_str, ccs811_status_to_str
 
 try:
@@ -111,7 +111,7 @@ class CCS811Custom(ICSS811):
         self.r_orig_tvoc = self.r_tvoc = int(((buf[2] & 0xFF) << 8) | (buf[3] & 0xFF))  # & ~0x8000
         self.r_raw_data = buf[6:8]
         self.r_raw_current = int((buf[6] & (~0x3)) >> 2)
-        self.r_raw_adc = (1.65 / 1023) * (int(buf[7] & 0x3) << 8 | int(buf[7] & 0xFF))
+        self.r_raw_adc = (1.65 / 1023) * (int(buf[6] & 0x3) << 8 | int(buf[7] & 0xFF))
 
         if self.r_eco2 > CCS811Custom.MAX_CO2:
             self.r_overflow = True
@@ -130,7 +130,6 @@ class CCS811Custom(ICSS811):
             )
 
         # Additional post-check. Note: get_error() sends i2c message reading bit register
-        sleep_ms(12)
         if self._sensor.get_error():
             self.r_error = True
             self.r_error_code = self._sensor.get_error_code()
