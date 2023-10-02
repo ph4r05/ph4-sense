@@ -2,7 +2,7 @@ from machine import I2C
 
 from ph4_sense.adapters import const, sleep_ms
 from ph4_sense.sensors.ccs811_mp_base import CCS811
-from ph4_sense.sensors.ccs811base import CCS811Wrapper
+from ph4_sense.sensors.ccs811base import DRIVE_MODE_1SEC, CCS811Wrapper
 
 try:
     from typing import Optional
@@ -36,3 +36,6 @@ class MicroCCS811(CCS811Wrapper):
 
     def get_drive_mode(self) -> int:
         return self._sensor.drive_mode.get()
+
+    def reboot_to_mode(self, drive_mode=DRIVE_MODE_1SEC):
+        return self._sensor.reboot_to_mode(drive_mode)

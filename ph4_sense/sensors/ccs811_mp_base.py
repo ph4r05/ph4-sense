@@ -66,7 +66,7 @@ _SW_RESET = const(0xFF)
 # _BOOTLOADER_APP_ERASE = 0xF1
 # _BOOTLOADER_APP_DATA = 0xF2
 # _BOOTLOADER_APP_VERIFY = 0xF3
-# _BOOTLOADER_APP_START = 0xF4
+_BOOTLOADER_APP_START = const(0xF4)
 
 DRIVE_MODE_IDLE = const(0x00)
 DRIVE_MODE_1SEC = const(0x01)
@@ -295,7 +295,7 @@ class CCS811:
     temp_offset = 0.0
     """Temperature offset."""
 
-    def __init__(self, i2c_bus: I2C, address: int = 0x5A) -> None:
+    def __init__(self, i2c_bus: I2C, address: int = 0x5A, drive_mode=DRIVE_MODE_1SEC) -> None:
         self.i2c_bus = i2c_bus
         self.address = address
 
@@ -314,8 +314,13 @@ class CCS811:
         self.drive_mode = RWBits(register_meas_mode, 3, 4)
         self.cmd_buf = bytearray(1)
         self.resp_buf8 = bytearray(8)
+        self._eco2 = None  # pylint: disable=invalid-name
+        self._tvoc = None  # pylint: disable=invalid-name
 
-        # self.i2c_device = I2CDevice(i2c_bus, address)
+        # Post-boot init
+        self.on_boot(drive_mode)
+
+    def on_boot(self, drive_mode=DRIVE_MODE_1SEC):
         # check that the HW id is correct
         hwid = self.hw_id.get()
         if hwid != _HW_ID_CODE:
@@ -324,14 +329,14 @@ class CCS811:
             )
 
         # try to start the app
-        self._i2c_read_words_from_cmd(0xF4, 150, None)
+        self._i2c_read_words_from_cmd(_BOOTLOADER_APP_START, 150, None)
 
         # make sure there are no errors and we have entered application mode
         err = self.error.get()
         if err:
-            r_error = self.error_code
-            raise RuntimeError(
-                "Device returned an error! Try removing and reapplying power to "
+            r_error = self.error_code  # clears error flag
+            print(
+                "CCS811 Error: Device returned an error! Try removing and reapplying power to "
                 "the device and running the code again. Err: {}, err: {}, str: {}".format(
                     err, r_error, ccs811_err_to_str(r_error)
                 )
@@ -349,7 +354,7 @@ class CCS811:
         sleep_ms(_SLEEP_MS_CONST)
 
         # default to read every second
-        self.drive_mode.set(DRIVE_MODE_1SEC)
+        self.drive_mode.set(drive_mode)
         sleep_ms(_SLEEP_MS_CONST)
         print("Drive mode", self.drive_mode.get())
 
@@ -357,9 +362,6 @@ class CCS811:
         if err:
             r_error = self.error_code
             print("err", err, r_error, ccs811_err_to_str(r_error))
-
-        self._eco2 = None  # pylint: disable=invalid-name
-        self._tvoc = None  # pylint: disable=invalid-name
 
     def _i2c_read_words_from_cmd(self, command, delay, response_buffer):
         self.cmd_buf[0] = command
@@ -484,7 +486,17 @@ class CCS811:
         self.i2c_bus.writeto(self.address, buf)
 
     def reset(self) -> None:
-        """Initiate a software reset."""
+        """Initiate a software reset, switches device to a boot mode"""
         # reset sequence from the datasheet
         seq = bytearray([_SW_RESET, 0x11, 0xE5, 0x72, 0x8A])
         self.i2c_bus.writeto(self.address, seq)
+
+    def app_start(self) -> None:
+        """App start for move to app mode from boot mode"""
+        seq = bytearray([_BOOTLOADER_APP_START])
+        self.i2c_bus.writeto(self.address, seq)
+
+    def reboot_to_mode(self, drive_mode=DRIVE_MODE_1SEC):
+        self.reset()
+        sleep_ms(12)
+        self.on_boot(drive_mode)

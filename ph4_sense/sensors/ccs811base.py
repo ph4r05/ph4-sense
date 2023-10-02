@@ -8,6 +8,9 @@ except ImportError:
     pass
 
 
+DRIVE_MODE_1SEC = const(0x1)
+
+
 class ICSS811:
     def read_sensor_buf(self) -> Optional[bytes]:
         raise NotImplementedError
@@ -22,6 +25,9 @@ class ICSS811:
         raise NotImplementedError
 
     def get_drive_mode(self) -> int:
+        raise NotImplementedError
+
+    def reboot_to_mode(self, drive_mode=DRIVE_MODE_1SEC):
         raise NotImplementedError
 
 
@@ -71,6 +77,9 @@ class CCS811Custom(ICSS811):
 
     def get_drive_mode(self) -> int:
         return self._sensor.get_drive_mode()
+
+    def reboot_to_mode(self, drive_mode=DRIVE_MODE_1SEC):
+        return self._sensor.reboot_to_mode(drive_mode)
 
     def reset_r(self):
         self.r_status = None

@@ -4,21 +4,25 @@ import adafruit_ccs811
 import busio
 from adafruit_bus_device.i2c_device import I2CDevice
 
-from ph4_sense.adapters import const, getLogger, time
-from ph4_sense.sensors.ccs811base import CCS811Wrapper
+from ph4_sense.adapters import const, getLogger, sleep_ms, time
+from ph4_sense.sensors.ccs811base import DRIVE_MODE_1SEC, CCS811Wrapper
 
 _ALG_RESULT_DATA = const(0x02)
 logger = getLogger(__name__)
 
 
 class FixedCCS811(adafruit_ccs811.CCS811):
-    def __init__(self, i2c_bus: busio.I2C, address: int = 0x5A) -> None:
+    def __init__(self, i2c_bus: busio.I2C, address: int = 0x5A, drive_mode=adafruit_ccs811.DRIVE_MODE_1SEC) -> None:
         # Unfortunately, we cannot use adafruit constructor as device-error when init causes us to
         # raise an exception, without possibility to recover. It is unacceptable to ask for power cycle.
         # super().__init__(i2c_bus, address)
 
         self.i2c_device = I2CDevice(i2c_bus, address)
+        self._eco2 = None  # pylint: disable=invalid-name
+        self._tvoc = None  # pylint: disable=invalid-name
+        self.on_boot(drive_mode)
 
+    def on_boot(self, drive_mode=adafruit_ccs811.DRIVE_MODE_1SEC):
         # check that the HW id is correct
         if self.hw_id != adafruit_ccs811._HW_ID_CODE:
             raise RuntimeError("Device ID returned is not correct! Please check your wiring.")
@@ -46,10 +50,12 @@ class FixedCCS811(adafruit_ccs811.CCS811):
         self.interrupt_enabled = False
 
         # default to read every second
-        self.drive_mode = adafruit_ccs811.DRIVE_MODE_1SEC
+        self.drive_mode = drive_mode
 
-        self._eco2 = None  # pylint: disable=invalid-name
-        self._tvoc = None  # pylint: disable=invalid-name
+    def reboot_to_mode(self, drive_mode=adafruit_ccs811.DRIVE_MODE_1SEC):
+        self.reset()
+        sleep_ms(12)
+        self.on_boot(drive_mode)
 
 
 class AdaCCS811(CCS811Wrapper):
@@ -77,3 +83,6 @@ class AdaCCS811(CCS811Wrapper):
 
     def get_drive_mode(self) -> int:
         return self._sensor.drive_mode
+
+    def reboot_to_mode(self, drive_mode=DRIVE_MODE_1SEC):
+        return self._sensor.reboot_to_mode(drive_mode)
