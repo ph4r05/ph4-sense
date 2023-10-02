@@ -1,5 +1,5 @@
 from ph4_sense.adapters import const, sleep_ms
-from ph4_sense.sensors.common import ccs811_err_to_str
+from ph4_sense.sensors.common import ccs811_err_to_str, ccs811_status_to_str
 
 try:
     from typing import Optional, Tuple
@@ -103,21 +103,8 @@ class CCS811Custom(ICSS811):
         self.r_status = buf[4]
         self.r_error_id = buf[5]
         self.r_err_str = CCS811Custom.err_to_str(self.r_error_id)
-
-        if self.r_status & 0x1:
-            self.r_error = True
-            self.r_stat_str += "Er "  # Error
-        if self.r_status & 0x8:
-            self.r_stat_str += "Dr "  # Data ready
-        if self.r_status & 0x10:
-            self.r_stat_str += "F+ "  # Valid Fw loaded
-        else:
-            self.r_stat_str += "F- "  # Valid Fw loaded
-
-        if self.r_status & 0x80:
-            self.r_stat_str += "R+ "  # FW_MODE, 1 = ready to measure
-        else:
-            self.r_stat_str += "R- "  # FW_MODE, 1 = ready to measure
+        self.r_error = self.r_status & 0x1
+        self.r_stat_str = ccs811_status_to_str(self.r_status)
 
         # Proceed to normal data processing
         self.r_orig_co2 = self.r_eco2 = int(((buf[0] & 0xFF) << 8) | (buf[1] & 0xFF))  # & ~0x8000

@@ -31,7 +31,12 @@ class FixedCCS811(adafruit_ccs811.CCS811):
 
         # make sure there are no errors and we have entered application mode
         if self.error:
-            logger.error("CCS811 returned an error on init! Using it further may cause non-deterministic behaviour")
+            code = self.error_code  # clears error flag
+            logger.error(
+                "CCS811 returned an error {} on init! Using it further may cause non-deterministic behaviour".format(
+                    code
+                )
+            )
         if not self.fw_mode:
             raise RuntimeError(
                 "Device did not enter application mode! If you got here, there may "
