@@ -45,6 +45,7 @@ class CCS811Custom(ICSS811):
 
     def __init__(self, sensor: CCS811Wrapper):
         self._sensor = sensor
+        self.drive_mode = DRIVE_MODE_1SEC
         self.r_status: Optional[int] = None
         self.r_error_id: Optional[int] = None
         self.r_raw_data: Optional[bytes] = None
@@ -79,6 +80,7 @@ class CCS811Custom(ICSS811):
         return self._sensor.get_drive_mode()
 
     def reboot_to_mode(self, drive_mode=DRIVE_MODE_1SEC):
+        self.drive_mode = drive_mode
         return self._sensor.reboot_to_mode(drive_mode)
 
     def reset_r(self):
@@ -123,17 +125,18 @@ class CCS811Custom(ICSS811):
         self.r_raw_adc = (1.65 / 1023) * (int(buf[6] & 0x3) << 8 | int(buf[7] & 0xFF))
 
         if self.r_eco2 > CCS811Custom.MAX_CO2:
-            self.r_overflow = True
+            # self.r_overflow = True
             self.r_eco2 = self.r_eco2 & ~0x8000
 
         if self.r_tvoc > CCS811Custom.MAX_TVOC:
-            self.r_overflow = True
+            # self.r_overflow = True
             self.r_tvoc = self.r_tvoc - CCS811Custom.MAX_TVOC
 
         # as per datasheet, meaningful values are on 0..5th bit
         if (0 < self.r_error_id <= 32) or self.r_error:
-            # Clear error
+            # Clear error flag by reading error code register (datasheet)
             code2 = self._sensor.get_error_code()
+            # self.reboot_to_mode(self.drive_mode)
             raise RuntimeError(
                 f"Data read error err_id: {self.r_error_id}=?{code2}; err: [{self.r_err_str}], st: [{self.r_stat_str}]"
             )

@@ -186,7 +186,9 @@ class Sensei:
 
             self.print("\n - Connecting CCS811")
             self.ccs811 = css811_factory(self.i2c) if self.has_ccs811 else None
-            if not self.ccs811:
+            if self.ccs811:
+                self.ccs811.reboot_to_mode(0x1)
+            else:
                 self.print("CCS811 not connected")
 
             self.print("\n - Connecting SCD40")
