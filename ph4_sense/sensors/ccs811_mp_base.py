@@ -318,15 +318,28 @@ class CCS811:
         self._tvoc = None  # pylint: disable=invalid-name
 
         # Post-boot init
-        self.on_boot(drive_mode)
+        self.reboot_to_mode(drive_mode)
 
     def on_boot(self, drive_mode=DRIVE_MODE_1SEC):
+        register_hw_ver = BitRegister(self.i2c_bus, self.address, 0x21, 1)
+        register_fw_boot_ver = BitRegister(self.i2c_bus, self.address, 0x23, 2)
+        register_fw_app_ver = BitRegister(self.i2c_bus, self.address, 0x24, 2)
+
         # check that the HW id is correct
         hwid = self.hw_id.get()
         if hwid != _HW_ID_CODE:
             raise RuntimeError(
                 "Device ID returned is not correct! Please check your wiring. {} vs {}".format(hwid, _HW_ID_CODE)
             )
+
+        hw_ver = register_hw_ver.read()
+        print(f"CCS811 hw ver: {hex(hw_ver[0])}")
+
+        boot_ver = register_fw_boot_ver.read()
+        print(f"CCS811 boot ver: {hex(boot_ver[0])}{hex(boot_ver[1])}")
+
+        app_ver = register_fw_app_ver.read()
+        print(f"CCS811 app ver: {hex(app_ver[0])}{hex(app_ver[1])}")
 
         # try to start the app
         self._i2c_read_words_from_cmd(_BOOTLOADER_APP_START, 150, None)

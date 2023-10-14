@@ -3,6 +3,7 @@ from typing import Optional
 import adafruit_ccs811
 import busio
 from adafruit_bus_device.i2c_device import I2CDevice
+from adafruit_register import i2c_bits
 
 from ph4_sense.adapters import const, getLogger, sleep_ms, time
 from ph4_sense.sensors.ccs811base import DRIVE_MODE_1SEC, CCS811Wrapper
@@ -12,6 +13,10 @@ logger = getLogger(__name__)
 
 
 class FixedCCS811(adafruit_ccs811.CCS811):
+    hw_ver = i2c_bits.ROBits(8, 0x21, 0, 1)
+    boot_ver = i2c_bits.ROBits(16, 0x23, 0, 2)
+    app_ver = i2c_bits.ROBits(16, 0x24, 0, 2)
+
     def __init__(self, i2c_bus: busio.I2C, address: int = 0x5A, drive_mode=adafruit_ccs811.DRIVE_MODE_1SEC) -> None:
         # Unfortunately, we cannot use adafruit constructor as device-error when init causes us to
         # raise an exception, without possibility to recover. It is unacceptable to ask for power cycle.
@@ -20,12 +25,17 @@ class FixedCCS811(adafruit_ccs811.CCS811):
         self.i2c_device = I2CDevice(i2c_bus, address)
         self._eco2 = None  # pylint: disable=invalid-name
         self._tvoc = None  # pylint: disable=invalid-name
-        self.on_boot(drive_mode)
+        self.reboot_to_mode(drive_mode)
 
     def on_boot(self, drive_mode=adafruit_ccs811.DRIVE_MODE_1SEC):
         # check that the HW id is correct
         if self.hw_id != adafruit_ccs811._HW_ID_CODE:
             raise RuntimeError("Device ID returned is not correct! Please check your wiring.")
+
+        print(f"CCS811 hw ver: {hex(self.hw_ver)}")
+        print(f"CCS811 boot ver: {hex(self.boot_ver)}")
+        print(f"CCS811 app ver: {hex(self.app_ver)}")
+
         # try to start the app
         buf = bytearray(1)
         buf[0] = 0xF4

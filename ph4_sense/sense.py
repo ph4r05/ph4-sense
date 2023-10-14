@@ -187,7 +187,7 @@ class Sensei:
             self.print("\n - Connecting CCS811")
             self.ccs811 = css811_factory(self.i2c) if self.has_ccs811 else None
             if self.ccs811:
-                self.ccs811.reboot_to_mode(0x1)
+                pass
             else:
                 self.print("CCS811 not connected")
 
@@ -260,6 +260,11 @@ class Sensei:
         self.ccs_co2 = 0
         self.ccs_tvoc = 0
         try:
+            if self.ccs811.get_fw_mode() != 1:
+                self.print("CCS811 Not in App mode! Rebooting")
+                self.ccs811.reboot_to_mode()
+                return
+
             nccs_co2, nccs_tvoc = self.ccs811.read_data()
             inv_ctr = 0
 
@@ -506,7 +511,7 @@ class Sensei:
         while True:
             self.maybe_reconnect_mqtt()
             self.measure_loop_body()
-            sleep_ms(1_000)
+            sleep_ms(2_000)
 
 
 def main():
