@@ -12,7 +12,7 @@ CSS811Adapter = Any
 # Machine-dependent import
 if not _CCS811_IMPORTED:
     try:
-        from ph4_sense.sensors.ccs811_ada import AdaCCS811 as CSS811Adapter
+        from ph4_sense_py.sensors.ccs811_ada import AdaCCS811 as CSS811Adapter
 
         _CCS811_IMPORTED = True
     except ImportError:

@@ -69,7 +69,14 @@ setup(
         "Programming Language :: Python",
         "Programming Language :: Python :: 3.10",
     ],
-    packages=find_packages(include=["ph4_sense", "ph4_sense.*"]),
+    packages=find_packages(
+        include=[
+            "ph4_sense",
+            "ph4_sense.*",
+            "ph4_sense_py",
+            "ph4_sense_py.*",
+        ]
+    ),
     include_package_data=True,
     install_requires=install_requires,
     extras_require={

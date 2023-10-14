@@ -10,7 +10,7 @@ AHTx0 = Any
 # Machine-dependent import
 if not _AHTX0_IMPORTED:
     try:
-        from ph4_sense.sensors.athx0_ada import AdaAHTx0 as AHTx0  # type: ignore
+        from ph4_sense_py.sensors.athx0_ada import AdaAHTx0 as AHTx0  # type: ignore
 
         _AHTX0_IMPORTED = True
     except ImportError:
