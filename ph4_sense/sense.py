@@ -23,7 +23,7 @@ class Sensei:
         has_sgp30=True,
         has_ccs811=True,
         has_scd4x=True,
-        has_sps30=True,
+        has_sps30=False,
         scl_pin=22,
         sda_pin=21,
     ):
@@ -130,6 +130,7 @@ class Sensei:
         self.has_sgp30 = False
         self.has_ccs811 = False
         self.has_scd4x = False
+        self.has_sps30 = False
 
         for sensor in sensors:
             sensor = sensor.lower()
