@@ -49,8 +49,8 @@ class Sensei:
         self.set_sensor_id("bed")
 
         self.co2eq = 0
-        self.co2eq_1 = 0
-        self.tvoc = 0
+        self.sgp30_co2eq = 0
+        self.sgp30_tvoc = 0
         self.eth = 0
         self.h2 = 0
         self.temp = 0
@@ -300,16 +300,16 @@ class Sensei:
             return
 
         try:
-            self.co2eq_1, self.tvoc = self.sgp30.co2eq_tvoc()
+            self.sgp30_co2eq, self.sgp30_tvoc = self.sgp30.co2eq_tvoc()
             self.h2, self.eth = self.sgp30.raw_h2_ethanol()
 
-            if self.co2eq_1:
-                self.last_sgp30_co2 = self.co2eq_1
-                self.eavg_sgp30_co2.update(self.co2eq_1)
+            if self.sgp30_co2eq:
+                self.last_sgp30_co2 = self.sgp30_co2eq
+                self.eavg_sgp30_co2.update(self.sgp30_co2eq)
 
-            if self.tvoc:
-                self.last_sgp30_tvoc = self.tvoc
-                self.eavg_sgp30_tvoc.update(self.tvoc)
+            if self.sgp30_tvoc:
+                self.last_sgp30_tvoc = self.sgp30_tvoc
+                self.eavg_sgp30_tvoc.update(self.sgp30_tvoc)
 
         except Exception as e:
             self.print("SGP30 err:", e)
@@ -402,7 +402,7 @@ class Sensei:
         try:
             numerator = 0
             valid_cnt = 0
-            if self.sgp30 and self.co2eq_1:
+            if self.sgp30 and self.sgp30_co2eq:
                 numerator += self.last_sgp30_co2
                 valid_cnt += 1
 
@@ -467,8 +467,8 @@ class Sensei:
         self.publish_payload(
             f"sensors/sgp30{self.mqtt_sensor_suffix}",
             {
-                "eCO2": self.co2eq,
-                "TVOC": self.tvoc,
+                "eCO2": self.eavg_sgp30_co2.cur,
+                "TVOC": self.eavg_sgp30_tvoc.cur,
                 "Eth": self.eth,
                 "H2": self.h2,
                 "temp": self.temp,
@@ -561,7 +561,8 @@ class Sensei:
         self.update_metrics()
 
         self.print(
-            f"CO2eq: {dval(self.co2eq):4.1f} (r={dval(self.co2eq_1):4d}) ppm, TVOC: {dval(self.tvoc):4d} ppb, "
+            f"CO2eq: {dval(self.sgp30_co2eq):4.1f} (r={dval(self.eavg_sgp30_co2.cur):4d}) ppm, "
+            + f"TVOC: {dval(self.sgp30_tvoc):4d} ppb, "
             + f"CCS CO2: {dval(self.ccs_co2):4d} ({dval(self.eavg_css811_co2.cur):4.1f}), "
             + f"TVOC2: {dval(self.ccs_tvoc):3d} ({dval(self.eavg_css811_tvoc.cur):3.1f}), "
             + f"Eth: {dval(self.eth):5d}, H2: {self.h2:5d}, {dval(self.temp):4.2f} C, {dval(self.humd):4.2f} %%, "
