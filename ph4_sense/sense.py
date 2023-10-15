@@ -34,6 +34,7 @@ class Sensei:
         self.has_hdc1080 = has_hdc1080
         self.scl_pin = scl_pin
         self.sda_pin = sda_pin
+        self.sps30_serial = None
 
         self.wifi_ssid = None
         self.wifi_passphrase = None
@@ -123,6 +124,9 @@ class Sensei:
 
         if "sensors" in js:
             self.load_config_sensors(js["sensors"])
+
+        if "sps30_serial" in js:
+            self.sps30_serial = js["sps30_serial"]
 
     def load_config_sensors(self, sensors: List[str]):
         self.has_aht = False
@@ -235,9 +239,16 @@ class Sensei:
 
             if self.has_sps30:
                 self.print("\n - Connecting SPS30")
-                from ph4_sense.sensors.sps30 import sps30_factory
+                if self.sps30_serial:
+                    from ph4_sense_py.sensors.sps30_uart_ada import SPS30AdaUart
 
-                self.sps30 = sps30_factory(self.i2c)
+                    self.sps30 = SPS30AdaUart(self.sps30_serial)
+                    self.sps30.start()
+                else:
+                    from ph4_sense.sensors.sps30 import sps30_factory
+
+                    self.sps30 = sps30_factory(self.i2c)
+
                 if self.sps30:
                     pass
                 else:
@@ -426,6 +437,7 @@ class Sensei:
             self.maybe_reconnect_mqtt()
             self.publish_sgp30()
             self.publish_ccs811()
+            self.publish_sps30()
             self.last_pub = t
         except Exception as e:
             self.print("Error in pub:", e)
