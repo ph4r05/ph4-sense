@@ -12,3 +12,4 @@ sensors:
   - aht21
   - sgp30
   - scd40
+  - sps30

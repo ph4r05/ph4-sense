@@ -19,6 +19,7 @@ install_requires = [
     "adafruit-circuitpython-scd4x",
     "adafruit-circuitpython-ccs811",
     "paho-mqtt",
+    "psutil",
     "ph4-monitlib>=0.0.5",
 ]
 

@@ -1,9 +1,10 @@
-from ph4_sense.adapters import getLogger, json, sleep_ms, time
+from ph4_sense.adapters import getLogger, json, mem_stats, sleep_ms, time
 from ph4_sense.filters import ExpAverage, SensorFilter
 from ph4_sense.sensors.athx0 import ahtx0_factory
 from ph4_sense.sensors.ccs811 import CCS811Custom, css811_factory
 from ph4_sense.sensors.scd4x import scd4x_factory
 from ph4_sense.sensors.sgp30 import sgp30_factory
+from ph4_sense.sensors.sps30 import sps30_factory
 from ph4_sense.udplogger import UdpLogger
 from ph4_sense.utils import dval, try_fnc
 
@@ -22,6 +23,7 @@ class Sensei:
         has_sgp30=True,
         has_ccs811=True,
         has_scd4x=True,
+        has_sps30=True,
         scl_pin=22,
         sda_pin=21,
     ):
@@ -31,6 +33,7 @@ class Sensei:
         self.has_sgp30 = has_sgp30
         self.has_ccs811 = has_ccs811
         self.has_scd4x = has_scd4x
+        self.has_sps30 = has_sps30
         self.scl_pin = scl_pin
         self.sda_pin = sda_pin
 
@@ -68,8 +71,9 @@ class Sensei:
         self.scd40_co2 = None
         self.scd40_temp = None
         self.scd40_hum = None
+        self.sps30_data = None
 
-        self.temp_sync_timeout = 60
+        self.temp_sync_timeout = 180
         self.mqtt_reconnect_timeout = 60 * 3
         self.wifi_reconnect_timeout = 60 * 3
         self.readings_publish_timeout = 60
@@ -88,6 +92,7 @@ class Sensei:
         self.aht21 = None
         self.ccs811 = None
         self.scd4x = None
+        self.sps30 = None
         self.logger = None
 
     def set_sensor_id(self, sensor_id):
@@ -136,6 +141,8 @@ class Sensei:
                 self.has_ccs811 = True
             elif sensor in ("scd4x", "scd41", "scd40"):
                 self.has_scd4x = True
+            elif sensor in ("sps30",):
+                self.has_sps30 = True
 
     def print(self, msg, *args):
         self.print_cli(msg, *args)
@@ -170,33 +177,50 @@ class Sensei:
     def connect_sensors(self):
         self.print("\nConnecting sensors")
         try:
-            self.print(" - Connecting SGP30")
-            self.sgp30 = sgp30_factory(self.i2c, measure_test=True, iaq_init=False) if self.has_sgp30 else None
-            if self.sgp30:
-                # self.sgp30.set_iaq_baseline(0x8973, 0x8AAE)
-                self.sgp30.set_iaq_relative_humidity(26, 45)
-                self.sgp30.iaq_init()
-            else:
-                self.print("SGP30 not connected")
+            if self.has_sgp30:
+                self.print(" - Connecting SGP30")
+                self.sgp30 = sgp30_factory(self.i2c, measure_test=True, iaq_init=False)
+                if self.sgp30:
+                    # self.sgp30.set_iaq_baseline(0x8973, 0x8AAE)
+                    self.sgp30.set_iaq_relative_humidity(26, 45)
+                    self.sgp30.iaq_init()
+                else:
+                    self.print("SGP30 not connected")
+                self.log_memory()
 
-            self.print("\n - Connecting AHT21")
-            self.aht21 = ahtx0_factory(self.i2c) if self.has_aht else None
-            if not self.aht21:
-                self.print("AHT21 not connected")
+            if self.has_aht:
+                self.print("\n - Connecting AHT21")
+                self.aht21 = ahtx0_factory(self.i2c)
+                if not self.aht21:
+                    self.print("AHT21 not connected")
+                self.log_memory()
 
-            self.print("\n - Connecting CCS811")
-            self.ccs811 = css811_factory(self.i2c) if self.has_ccs811 else None
-            if self.ccs811:
-                pass
-            else:
-                self.print("CCS811 not connected")
+            if self.has_ccs811:
+                self.print("\n - Connecting CCS811")
+                self.ccs811 = css811_factory(self.i2c)
+                if self.ccs811:
+                    pass
+                else:
+                    self.print("CCS811 not connected")
+                self.log_memory()
 
-            self.print("\n - Connecting SCD40")
-            self.scd4x = scd4x_factory(self.i2c) if self.has_scd4x else None
-            if self.scd4x:
-                self.scd4x.start_periodic_measurement()
-            else:
-                self.print("SCD4x not connected")
+            if self.has_scd4x:
+                self.print("\n - Connecting SCD40")
+                self.scd4x = scd4x_factory(self.i2c)
+                if self.scd4x:
+                    self.scd4x.start_periodic_measurement()
+                else:
+                    self.print("SCD4x not connected")
+                self.log_memory()
+
+            if self.has_sps30:
+                self.print("\n - Connecting SPS30")
+                self.sps30 = sps30_factory(self.i2c)
+                if self.sps30:
+                    pass
+                else:
+                    self.print("SPS30 not connected")
+                self.log_memory()
 
             self.print("\nSensors connected")
         except Exception as e:
@@ -222,7 +246,7 @@ class Sensei:
                     pass
 
                 if self.ccs811:
-                    try_fnc(lambda: self.ccs811.set_environmental_data(cal_hum, cal_temp))
+                    # try_fnc(lambda: self.ccs811.set_environmental_data(cal_hum, cal_temp))
                     pass
 
                 self.last_tsync = time.time()
@@ -318,6 +342,20 @@ class Sensei:
             self.print("Err SDC40: ", e)
             self.logger.error("SDC40 err: {}".format(e))
             self.logger.debug("SDC40 err: {}".format(e), exc_info=e)
+            return
+
+    def measure_sps30(self):
+        if not self.has_sps30 or not self.sps30:
+            return
+        try:
+            if self.sps30.data_available:
+                self.sps30_data = self.sps30.read()
+                self.print("SPS30 data {}".format(self.sps30_data))
+
+        except Exception as e:
+            self.print("Err SPS30: ", e)
+            self.logger.error("SPS30 err: {}".format(e))
+            self.logger.debug("SPS30 err: {}".format(e), exc_info=e)
             return
 
     def update_metrics(self):
@@ -443,6 +481,12 @@ class Sensei:
             },
         )
 
+    def publish_sps30(self):
+        if not self.sps30 or not self.sps30_data:
+            return
+
+        self.publish_payload(f"sensors/sps30{self.mqtt_sensor_suffix}", self.sps30_data)
+
     def on_wifi_reconnect(self):
         self.print("WiFi Reconnecting")
         self.connect_wifi(force=True)
@@ -472,6 +516,7 @@ class Sensei:
         self.measure_sqp30()
         self.measure_ccs811()
         self.measure_scd4x()
+        self.measure_sps30()
         self.update_metrics()
 
         self.print(
@@ -484,26 +529,38 @@ class Sensei:
 
         self.publish()
 
+    def log_memory(self):
+        stats = mem_stats()
+        self.print("Memory alloc {}, free {}".format(stats[0], stats[1]))
+
     def base_init(self):
         self.logger = getLogger(__name__)
 
     def init_connections(self):
         self.base_init()
+        self.log_memory()
 
         print("Starting bus")
         self.start_bus()
+        self.log_memory()
 
         print("Loading config")
         self.load_config()
+        self.log_memory()
 
         print("\nConnecting WiFi")
         self.connect_wifi()
+        self.log_memory()
 
         self.print("\nConnecting MQTT")
         self.connect_mqtt()
+        self.log_memory()
 
         self.connect_sensors()
+        self.log_memory()
+
         self.publish_booted()
+        self.log_memory()
 
     def main(self):
         self.init_connections()

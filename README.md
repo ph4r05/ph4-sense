@@ -28,6 +28,11 @@ sudo make altinstall
 python3.10 --version
 ```
 
+## Circuitry
+
+Note that SPS30 is 5V sensor while others are 3.3V. Directly attaching SPS30 to I2C won't work due to operating voltage difference.
+(Also note that I2C and UART on ESP32 and Rpi are 3.3V). A [level shifter](https://cdn-shop.adafruit.com/datasheets/an97055.pdf) is needed for 3.3V and 5V sensors to operate on the same I2C bus.
+
 ## Development
 
 Install pre-commit hooks defined by `.pre-commit-config.yaml`

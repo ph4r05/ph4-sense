@@ -22,6 +22,7 @@ class SenseiMp(Sensei):
         has_sgp30=True,
         has_ccs811=True,
         has_scd4x=True,
+        has_sps30=True,
         scl_pin=22,
         sda_pin=21,
     ):
@@ -32,6 +33,7 @@ class SenseiMp(Sensei):
             has_sgp30=has_sgp30,
             has_ccs811=has_ccs811,
             has_scd4x=has_scd4x,
+            has_sps30=has_sps30,
             scl_pin=scl_pin,
             sda_pin=sda_pin,
         )

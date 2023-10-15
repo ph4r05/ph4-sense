@@ -1,4 +1,6 @@
 try:
+    import gc
+
     import ujson as json
     import utime as time
     from micropython import const
@@ -24,10 +26,16 @@ try:
         global MAIN_LOGGER
         MAIN_LOGGER = logger
 
+    def mem_stats():
+        gc.collect()
+        return gc.mem_alloc(), gc.mem_free()
+
 except ImportError:
     import json  # type: ignore # noqa: F401
     import logging
     import time
+
+    import psutil
 
     def const(val):
         """const() replacement for non-micropython environment"""
@@ -41,3 +49,7 @@ except ImportError:
 
     def updateLogger(logger):
         return None  # does nothing, not supported outside ESP32
+
+    def mem_stats():
+        mem_info = psutil.virtual_memory()  # mem_info.total, mem_info.available,
+        return mem_info.used, mem_info.free

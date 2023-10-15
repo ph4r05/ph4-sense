@@ -106,7 +106,7 @@ class SPS30_I2C(SPS30):
     @property
     def data_available(self):
         """Boolean indicating if data is available or None for invalid response."""
-        self._sps30_command(self._CMD_READ_DATA_READY_FLAG, rx_size=3)
+        self._sps30_command(self.CMD_READ_DATA_READY_FLAG, rx_size=3)
         self._buffer_check(3)
         ready = None
         if self._buffer[1] == 0x00:
@@ -119,7 +119,7 @@ class SPS30_I2C(SPS30):
     @property
     def auto_cleaning_interval(self):
         """Read the auto cleaning interval."""
-        self._sps30_command(self._CMD_RW_AUTO_CLEANING_INTERVAL, rx_size=6)
+        self._sps30_command(self.CMD_RW_AUTO_CLEANING_INTERVAL, rx_size=6)
         self._buffer_check(6)
         self._scrunch_buffer(6)
         if self._delays:
@@ -137,7 +137,7 @@ class SPS30_I2C(SPS30):
          start/reset of the sensor module."
         """
         self._sps30_command(
-            self._CMD_RW_AUTO_CLEANING_INTERVAL,
+            self.CMD_RW_AUTO_CLEANING_INTERVAL,
             arguments=((value >> 16) & 0xFFFF, value & 0xFFFF),
         )
         if self._delays:
@@ -157,7 +157,7 @@ class SPS30_I2C(SPS30):
             self.stop()
         request_fp = self._fp_mode if use_floating_point is None else use_floating_point
         output_format = 0x0300 if request_fp else 0x0500
-        self._sps30_command(self._CMD_START_MEASUREMENT, arguments=(output_format,))
+        self._sps30_command(self.CMD_START_MEASUREMENT, arguments=(output_format,))
         mode_changed = self._set_fp_mode_fields(request_fp)
         # Data sheet states command execution time < 20ms
         if self._delays:
@@ -172,14 +172,14 @@ class SPS30_I2C(SPS30):
         Firmware 2.2 sets bit 19 of status register during this operation -
         this is undocumented behaviour.
         """
-        self._sps30_command(self._CMD_START_FAN_CLEANING)
+        self._sps30_command(self.CMD_START_FAN_CLEANING)
         if wait:
             delay = self.FAN_CLEAN_TIME if wait is True else wait
             time.sleep(delay)
 
     def stop(self):
         """Send stop command to SPS30."""
-        self._sps30_command(self._CMD_STOP_MEASUREMENT)
+        self._sps30_command(self.CMD_STOP_MEASUREMENT)
         # Data sheet states command execution time < 20ms
         if self._delays:
             time.sleep(0.020)
@@ -188,14 +188,14 @@ class SPS30_I2C(SPS30):
         """Perform a soft reset on the SPS30, restoring default values
         and placing sensor in Idle mode as if it had just powered up.
         The sensor must be started after a reset before data is read."""
-        self._sps30_command(self._CMD_SOFT_RESET)
+        self._sps30_command(self.CMD_SOFT_RESET)
         # Data sheet states command execution time < 100ms
         if self._delays:
             time.sleep(0.100)
 
     def sleep(self):
         """Enters the Sleep-Mode with minimum power consumption."""
-        self._sps30_command(self._CMD_SLEEP)
+        self._sps30_command(self.CMD_SLEEP)
         # Data sheet states command execution time < 5ms
         if self._delays:
             time.sleep(0.005)
@@ -205,17 +205,17 @@ class SPS30_I2C(SPS30):
         # Data sheet has two methods to wake-up, one way is to
         # intentionally send two consecutive wake-up commands
         try:
-            self._sps30_command(self._CMD_WAKEUP)
+            self._sps30_command(self.CMD_WAKEUP)
         except OSError:
             pass  # ignore any Errno 19 for first command
-        self._sps30_command(self._CMD_WAKEUP)
+        self._sps30_command(self.CMD_WAKEUP)
         # Data sheet states command execution time < 5ms
         if self._delays:
             time.sleep(0.005)
 
     def read_firmware_version(self):
         """Read firmware version returning as two element tuple."""
-        self._sps30_command(self._CMD_READ_VERSION, rx_size=3)
+        self._sps30_command(self.CMD_READ_VERSION, rx_size=3)
         self._buffer_check(3)
         return (self._buffer[0], self._buffer[1])
 
@@ -225,14 +225,14 @@ class SPS30_I2C(SPS30):
         # and read but the Sensirion library does this for some reason
         # https://github.com/Sensirion/embedded-sps/blob/master/sps30-i2c/sps30.c
         # https://github.com/Sensirion/arduino-sps/blob/master/sps30.cpp
-        self._sps30_command(self._CMD_READ_DEVICE_STATUS_REG, rx_size=6)
+        self._sps30_command(self.CMD_READ_DEVICE_STATUS_REG, rx_size=6)
         self._buffer_check(6)
         self._scrunch_buffer(6)
         return unpack_from(">I", self._buffer)[0]
 
     def clear_status_register(self):
         """Clear 32bit status register."""
-        self._sps30_command(self._CMD_CLEAR_DEVICE_STATUS_REG)
+        self._sps30_command(self.CMD_CLEAR_DEVICE_STATUS_REG)
         # Data sheet states command execution time < 5ms
         if self._delays:
             time.sleep(0.005)
@@ -278,7 +278,7 @@ class SPS30_I2C(SPS30):
 
     def _read_into_buffer(self):
         data_len = self._m_total_size
-        self._sps30_command(self._CMD_READ_MEASURED_VALUES, rx_size=data_len)
+        self._sps30_command(self.CMD_READ_MEASURED_VALUES, rx_size=data_len)
         self._buffer_check(data_len)
 
     def _scrunch_buffer(self, raw_data_len):
