@@ -14,12 +14,14 @@ install_requires = [
     "requests",
     "jsonpath_ng",
     "PyJWT==2.6.0",
+    "adafruit-blinka",
     "adafruit-circuitpython-sgp30",
     "adafruit-circuitpython-ahtx0",
     "adafruit-circuitpython-scd4x",
     "adafruit-circuitpython-ccs811",
     "paho-mqtt",
     "psutil",
+    "pyftdi",
     "ph4-monitlib>=0.0.5",
 ]
 
