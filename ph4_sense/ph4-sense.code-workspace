@@ -1,11 +1,8 @@
 {
 	"folders": [
 		{
-			"path": ".."
-		},
-		{
-			"name": "ph4_esp32",
-			"path": "ph4_esp32"
+			"name": "ph4_sense",
+			"path": "ph4_sense"
 		},
 		{
 			"name": "serial://dev/tty.usbserial-0001",

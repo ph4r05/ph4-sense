@@ -1,10 +1,7 @@
 {
 	"folders": [
 		{
-			"path": ".."
-		},
-		{
-			"name": "esp32_bed",
+			"name": ".",
 			"path": "."
 		},
 		{
