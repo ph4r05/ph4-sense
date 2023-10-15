@@ -2,7 +2,8 @@
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 # may exist already
-useradd -r -M -G ph4sense -s /usr/sbin/nologin -c "System User for ph4sense" ph4sense
+sudo groupadd ph4sense
+sudo useradd -r -M -g ph4sense -s /usr/sbin/nologin -c "System User for ph4sense" ph4sense
 sudo usermod -aG i2c ph4sense
 
 set -ex
