@@ -1,10 +1,6 @@
 from ph4_sense.adapters import getLogger, json, mem_stats, sleep_ms, time
 from ph4_sense.filters import ExpAverage, SensorFilter
-from ph4_sense.sensors.athx0 import ahtx0_factory
-from ph4_sense.sensors.ccs811 import CCS811Custom, css811_factory
-from ph4_sense.sensors.scd4x import scd4x_factory
-from ph4_sense.sensors.sgp30 import sgp30_factory
-from ph4_sense.sensors.sps30 import sps30_factory
+from ph4_sense.sensors.common import ccs811_err_to_str
 from ph4_sense.udplogger import UdpLogger
 from ph4_sense.utils import dval, try_fnc
 
@@ -24,6 +20,7 @@ class Sensei:
         has_ccs811=True,
         has_scd4x=True,
         has_sps30=False,
+        has_hdc1080=False,
         scl_pin=22,
         sda_pin=21,
     ):
@@ -34,6 +31,7 @@ class Sensei:
         self.has_ccs811 = has_ccs811
         self.has_scd4x = has_scd4x
         self.has_sps30 = has_sps30
+        self.has_hdc1080 = has_hdc1080
         self.scl_pin = scl_pin
         self.sda_pin = sda_pin
 
@@ -93,6 +91,7 @@ class Sensei:
         self.ccs811 = None
         self.scd4x = None
         self.sps30 = None
+        self.hdc1080 = None
         self.logger = None
 
     def set_sensor_id(self, sensor_id):
@@ -131,6 +130,7 @@ class Sensei:
         self.has_ccs811 = False
         self.has_scd4x = False
         self.has_sps30 = False
+        self.has_hdc1080 = False
 
         for sensor in sensors:
             sensor = sensor.lower()
@@ -144,6 +144,8 @@ class Sensei:
                 self.has_scd4x = True
             elif sensor in ("sps30",):
                 self.has_sps30 = True
+            elif sensor in ("hdc1080",):
+                self.has_hdc1080 = True
 
     def print(self, msg, *args):
         self.print_cli(msg, *args)
@@ -180,6 +182,8 @@ class Sensei:
         try:
             if self.has_sgp30:
                 self.print(" - Connecting SGP30")
+                from ph4_sense.sensors.sgp30 import sgp30_factory
+
                 self.sgp30 = sgp30_factory(self.i2c, measure_test=True, iaq_init=False)
                 if self.sgp30:
                     # self.sgp30.set_iaq_baseline(0x8973, 0x8AAE)
@@ -191,13 +195,26 @@ class Sensei:
 
             if self.has_aht:
                 self.print("\n - Connecting AHT21")
+                from ph4_sense.sensors.athx0 import ahtx0_factory
+
                 self.aht21 = ahtx0_factory(self.i2c)
                 if not self.aht21:
                     self.print("AHT21 not connected")
                 self.log_memory()
 
+            if self.has_hdc1080:
+                self.print("\n - Connecting HDC1080")
+                from ph4_sense.sensors.hdc1080 import hdc1080_factory
+
+                self.hdc1080 = hdc1080_factory(self.i2c)
+                if not self.hdc1080:
+                    self.print("HDC1080 not connected")
+                self.log_memory()
+
             if self.has_ccs811:
                 self.print("\n - Connecting CCS811")
+                from ph4_sense.sensors.ccs811 import css811_factory
+
                 self.ccs811 = css811_factory(self.i2c)
                 if self.ccs811:
                     pass
@@ -207,6 +224,8 @@ class Sensei:
 
             if self.has_scd4x:
                 self.print("\n - Connecting SCD40")
+                from ph4_sense.sensors.scd4x import scd4x_factory
+
                 self.scd4x = scd4x_factory(self.i2c)
                 if self.scd4x:
                     self.scd4x.start_periodic_measurement()
@@ -216,6 +235,8 @@ class Sensei:
 
             if self.has_sps30:
                 self.print("\n - Connecting SPS30")
+                from ph4_sense.sensors.sps30 import sps30_factory
+
                 self.sps30 = sps30_factory(self.i2c)
                 if self.sps30:
                     pass
@@ -229,32 +250,39 @@ class Sensei:
             raise
 
     def measure_temperature(self):
-        if not self.aht21:
+        if not self.aht21 and not self.hdc1080:
             return
 
         try:
             cal_temp = self.scd40_temp
             cal_hum = self.scd40_hum
 
-            self.temp, self.humd = try_fnc(lambda: self.aht21.read_temperature_humidity())
+            if self.aht21:
+                self.temp, self.humd = try_fnc(lambda: self.aht21.read_temperature_humidity())
+            else:
+                self.temp, self.humd = try_fnc(lambda: self.hdc1080.measurements())
+
             if not cal_temp or not cal_hum:
                 cal_temp = self.temp
                 cal_hum = self.humd
 
-            if cal_temp and cal_hum and time.time() - self.last_tsync > self.temp_sync_timeout:
-                if self.sgp30:
-                    try_fnc(lambda: self.sgp30.set_iaq_relative_humidity(cal_temp, cal_hum))
-                    pass
-
-                if self.ccs811:
-                    # try_fnc(lambda: self.ccs811.set_environmental_data(cal_hum, cal_temp))
-                    pass
-
-                self.last_tsync = time.time()
-                self.print("Temp sync", cal_temp, cal_hum)
+            self.calibrate_temps(cal_temp, cal_hum)
 
         except Exception as e:
             self.print("E: exc in temp", e)
+
+    def calibrate_temps(self, cal_temp, cal_hum):
+        if cal_temp and cal_hum and time.time() - self.last_tsync > self.temp_sync_timeout:
+            if self.sgp30:
+                try_fnc(lambda: self.sgp30.set_iaq_relative_humidity(cal_temp, cal_hum))
+                pass
+
+            if self.ccs811:
+                try_fnc(lambda: self.ccs811.set_environmental_data(cal_hum, cal_temp))
+                pass
+
+            self.last_tsync = time.time()
+            self.print("Temp sync", cal_temp, cal_hum)
 
     def measure_sqp30(self):
         if not self.sgp30:
@@ -311,7 +339,7 @@ class Sensei:
 
             if self.ccs811.r_error:
                 self.print(
-                    f"CCS811 logical-err: {self.ccs811.r_error_code} = {CCS811Custom.err_to_str(self.ccs811.r_error_code)}"
+                    f"CCS811 logical-err: {self.ccs811.r_error_code} = {ccs811_err_to_str(self.ccs811.r_error_code)}"
                 )
         except Exception as e:
             self.print("CCS error: ", e)

@@ -22,7 +22,8 @@ class SenseiPy(Sensei):
         has_sgp30=True,
         has_ccs811=True,
         has_scd4x=True,
-        has_sps30=True,
+        has_sps30=False,
+        has_hdc1080=False,
         scl_pin=None,
         sda_pin=None,
         config_file=None,
@@ -35,6 +36,7 @@ class SenseiPy(Sensei):
             has_ccs811=has_ccs811,
             has_scd4x=has_scd4x,
             has_sps30=has_sps30,
+            has_hdc1080=has_hdc1080,
             scl_pin=scl_pin,
             sda_pin=sda_pin,
         )

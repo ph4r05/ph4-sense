@@ -37,9 +37,13 @@ import time
 
 import serial
 
+from ph4_sense.sensors.sps30_base import SPS30
 
-class SPS30:
+
+class SPS30AdaUart(SPS30):
+    # TODO: unify interface with i2c
     def __init__(self, port):
+        super().__init__()
         self.port = port
         self.ser = serial.Serial(self.port, baudrate=115200, stopbits=1, parity="N", timeout=2)
 
@@ -48,6 +52,16 @@ class SPS30:
 
     def stop(self):
         self.ser.write([0x7E, 0x00, 0x01, 0x00, 0xFE, 0x7E])
+
+    @property
+    def data_available(self):
+        return True
+
+    def read(self):
+        vals = self.read_values()
+        for key, val in zip(self.FIELD_NAMES, vals):
+            self.aqi_reading[key] = val
+        return self.aqi_reading
 
     def read_values(self):
         self.ser.flushInput()
