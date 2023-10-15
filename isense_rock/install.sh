@@ -5,6 +5,7 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 sudo groupadd ph4sense
 sudo useradd -r -M -g ph4sense -s /usr/sbin/nologin -c "System User for ph4sense" ph4sense
 sudo usermod -aG i2c ph4sense
+sudo usermod -aG dialout ph4sense
 
 set -ex
 cd "${SCRIPT_DIR}"

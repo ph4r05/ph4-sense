@@ -48,7 +48,6 @@ class Sensei:
         self.mqtt_topic = None
         self.set_sensor_id("bed")
 
-        self.co2eq = 0
         self.sgp30_co2eq = 0
         self.sgp30_tvoc = 0
         self.eth = 0
@@ -258,6 +257,7 @@ class Sensei:
             self.print("\nSensors connected")
         except Exception as e:
             self.print("Exception in sensor init: ", e)
+            self.logger.debug("Exception in sensor init: {}".format(e), exc_info=e)
             raise
 
     def measure_temperature(self):
@@ -271,7 +271,7 @@ class Sensei:
             if self.aht21:
                 self.temp, self.humd = try_fnc(lambda: self.aht21.read_temperature_humidity())
             else:
-                self.temp, self.humd = try_fnc(lambda: self.hdc1080.measurements())
+                self.temp, self.humd = try_fnc(lambda: self.hdc1080.measurements)
 
             if not cal_temp or not cal_hum:
                 cal_temp = self.temp
@@ -281,6 +281,7 @@ class Sensei:
 
         except Exception as e:
             self.print("E: exc in temp", e)
+            self.logger.debug("Temp exception err: {}".format(e), exc_info=e)
 
     def calibrate_temps(self, cal_temp, cal_hum):
         if cal_temp and cal_hum and time.time() - self.last_tsync > self.temp_sync_timeout:
@@ -399,21 +400,7 @@ class Sensei:
             return
 
     def update_metrics(self):
-        try:
-            numerator = 0
-            valid_cnt = 0
-            if self.sgp30 and self.sgp30_co2eq:
-                numerator += self.last_sgp30_co2
-                valid_cnt += 1
-
-            if self.ccs811 and self.last_ccs811_co2:
-                numerator += self.last_ccs811_co2
-                valid_cnt += 1
-
-            self.co2eq = self.eavg.update(numerator / valid_cnt) if valid_cnt else 0.0
-        except Exception as e:
-            self.print("Metrics update err:", e)
-            return
+        pass
 
     def publish_booted(self):
         self.publish_payload(
@@ -561,7 +548,7 @@ class Sensei:
         self.update_metrics()
 
         self.print(
-            f"CO2eq: {dval(self.sgp30_co2eq):4.1f} (r={dval(self.eavg_sgp30_co2.cur):4d}) ppm, "
+            f"CO2eq: {dval(self.sgp30_co2eq):4.1f} (r={dval(self.eavg_sgp30_co2.cur):4.1f}) ppm, "
             + f"TVOC: {dval(self.sgp30_tvoc):4d} ppb, "
             + f"CCS CO2: {dval(self.ccs_co2):4d} ({dval(self.eavg_css811_co2.cur):4.1f}), "
             + f"TVOC2: {dval(self.ccs_tvoc):3d} ({dval(self.eavg_css811_tvoc.cur):3.1f}), "
