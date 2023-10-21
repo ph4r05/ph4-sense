@@ -34,8 +34,8 @@ class Zh03bUartBase:
         """
         self.uart.flush()  # flush input buffer
         self.uart.write(b"\xFF\x01\x86\x00\x00\x00\x00\x00\x79")
-        reading = buf2int(self.uart.read(2))
-        if reading != 0xFF86:
+        reading = self.uart.read(2)
+        if reading != b"\xFF\x86":
             # print(hex(reading))
             return None
 
@@ -53,12 +53,12 @@ class Zh03bUartBase:
         #
         if not to_run:
             self.uart.write(b"\xFF\x01\xA7\x01\x00\x00\x00\x00\x57")
-            response = buf2int(self.uart.read(3))
-            if response == 0xFFA701:
+            response = self.uart.read(3)
+            if response == b"\xFF\xA7\x01":
                 self.uart.flush()  # flush input buffer
                 return True
             else:
-                print(hex(response))
+                print(response)
                 self.uart.flush()  # flush input buffer
                 return False
 
@@ -66,8 +66,8 @@ class Zh03bUartBase:
         #
         if to_run == "run":
             self.uart.write(b"\xFF\x01\xA7\x00\x00\x00\x00\x00\x58")
-            response = buf2int(self.uart.read(3))
-            if response == 0xFFA701:
+            response = self.uart.read(3)
+            if response == b"\xFF\xA7\x01":
                 self.uart.flush()  # flush input buffer
                 return True
             else:
@@ -80,8 +80,8 @@ class Zh03bUartBase:
         """
         self.uart.flush()  # flush input buffer
         while True:
-            reading = buf2int(self.uart.read(2))
-            if reading == 0x424D:
+            reading = self.uart.read(2)
+            if reading == b"\x42\x4D":
                 buf2int(self.uart.read(2))  # frame_length
                 self.uart.read(6)  # reserved bytes readout
                 pm10 = buf2int(self.uart.read(2))

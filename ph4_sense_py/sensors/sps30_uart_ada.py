@@ -57,6 +57,18 @@ class SPS30AdaUart(SPS30):
     def data_available(self):
         return True
 
+    @staticmethod
+    def reverse_byte_stuffing(raw: bytes) -> bytes:
+        if b"\x7D\x5E" in raw:
+            raw = raw.replace(b"\x7D\x5E", b"\x7E")
+        if b"\x7D\x5D" in raw:
+            raw = raw.replace(b"\x7D\x5D", b"\x7D")
+        if b"\x7D\x31" in raw:
+            raw = raw.replace(b"\x7D\x31", b"\x11")
+        if b"\x7D\x33" in raw:
+            raw = raw.replace(b"\x7D\x33", b"\x13")
+        return raw
+
     def read(self):
         vals = self.read_values()
         for key, val in zip(self.FIELD_NAMES, vals):
@@ -76,14 +88,7 @@ class SPS30AdaUart(SPS30):
         raw = self.ser.read(toRead)
 
         # Reverse byte-stuffing
-        if b"\x7D\x5E" in raw:
-            raw = raw.replace(b"\x7D\x5E", b"\x7E")
-        if b"\x7D\x5D" in raw:
-            raw = raw.replace(b"\x7D\x5D", b"\x7D")
-        if b"\x7D\x31" in raw:
-            raw = raw.replace(b"\x7D\x31", b"\x11")
-        if b"\x7D\x33" in raw:
-            raw = raw.replace(b"\x7D\x33", b"\x13")
+        raw = SPS30AdaUart.reverse_byte_stuffing(raw)
 
         # Discard header and tail
         rawData = raw[5:-2]
@@ -104,14 +109,7 @@ class SPS30AdaUart(SPS30):
         raw = self.ser.read(toRead)
 
         # Reverse byte-stuffing
-        if b"\x7D\x5E" in raw:
-            raw = raw.replace(b"\x7D\x5E", b"\x7E")
-        if b"\x7D\x5D" in raw:
-            raw = raw.replace(b"\x7D\x5D", b"\x7D")
-        if b"\x7D\x31" in raw:
-            raw = raw.replace(b"\x7D\x31", b"\x11")
-        if b"\x7D\x33" in raw:
-            raw = raw.replace(b"\x7D\x33", b"\x13")
+        raw = SPS30AdaUart.reverse_byte_stuffing(raw)
 
         # Discard header, tail and decode
         serial_number = raw[5:-3].decode("ascii")
@@ -127,14 +125,7 @@ class SPS30AdaUart(SPS30):
         raw = self.ser.read(toRead)
 
         # Reverse byte-stuffing
-        if b"\x7D\x5E" in raw:
-            raw = raw.replace(b"\x7D\x5E", b"\x7E")
-        if b"\x7D\x5D" in raw:
-            raw = raw.replace(b"\x7D\x5D", b"\x7D")
-        if b"\x7D\x31" in raw:
-            raw = raw.replace(b"\x7D\x31", b"\x11")
-        if b"\x7D\x33" in raw:
-            raw = raw.replace(b"\x7D\x33", b"\x13")
+        raw = SPS30AdaUart.reverse_byte_stuffing(raw)
 
         # Discard header and tail
         data = raw[5:-2]
