@@ -1,4 +1,4 @@
-from ph4_sense.sensors.common import buf2int, get_ordering, int2buf
+from ph4_sense.support.buffers import buf2int, get_ordering, int2buf
 
 
 def test_main():

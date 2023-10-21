@@ -5,6 +5,7 @@ from umqtt.robust import MQTTClient
 from ph4_sense.adapters import sleep_ms, time, updateLogger
 from ph4_sense.logger_mp import MpLogger
 from ph4_sense.sense import Sensei
+from ph4_sense.support.uart_mp import UartMp
 from ph4_sense.utils import try_fnc
 
 # Set up your SPG30 sensor pin connections
@@ -24,6 +25,7 @@ class SenseiMp(Sensei):
         has_scd4x=True,
         has_sps30=False,
         has_hdc1080=False,
+        has_zh03b=False,
         scl_pin=22,
         sda_pin=21,
     ):
@@ -36,6 +38,7 @@ class SenseiMp(Sensei):
             has_scd4x=has_scd4x,
             has_sps30=has_sps30,
             has_hdc1080=has_hdc1080,
+            has_zh03b=has_zh03b,
             scl_pin=scl_pin,
             sda_pin=sda_pin,
         )
@@ -52,6 +55,15 @@ class SenseiMp(Sensei):
     def start_bus(self):
         self.i2c = machine.SoftI2C(scl=machine.Pin(self.scl_pin), sda=machine.Pin(self.sda_pin))
         self.i2c.start()
+
+    def get_uart_builder(self, desc):
+        if desc["type"] != "uart":
+            raise ValueError("Only uart type is supported")
+
+        def builder(**kwargs):
+            return UartMp(machine.UART(desc["port"], **kwargs))
+
+        return builder
 
     def connect_wifi(self, force=False):
         if not self.has_wifi:

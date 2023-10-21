@@ -21,6 +21,7 @@ class Sensei:
         has_scd4x=True,
         has_sps30=False,
         has_hdc1080=False,
+        has_zh03b=False,
         scl_pin=22,
         sda_pin=21,
     ):
@@ -32,9 +33,11 @@ class Sensei:
         self.has_scd4x = has_scd4x
         self.has_sps30 = has_sps30
         self.has_hdc1080 = has_hdc1080
+        self.has_zh03b = has_zh03b
         self.scl_pin = scl_pin
         self.sda_pin = sda_pin
-        self.sps30_serial = None
+        self.sps30_uart = None
+        self.zh03b_uart = None
 
         self.wifi_ssid = None
         self.wifi_passphrase = None
@@ -70,6 +73,7 @@ class Sensei:
         self.scd40_temp = None
         self.scd40_hum = None
         self.sps30_data = None
+        self.zh03b_data = None
 
         self.temp_sync_timeout = 180
         self.mqtt_reconnect_timeout = 60 * 3
@@ -92,6 +96,7 @@ class Sensei:
         self.scd4x = None
         self.sps30 = None
         self.hdc1080 = None
+        self.zh03b = None
         self.logger = None
 
     def set_sensor_id(self, sensor_id):
@@ -124,8 +129,11 @@ class Sensei:
         if "sensors" in js:
             self.load_config_sensors(js["sensors"])
 
-        if "sps30_serial" in js:
-            self.sps30_serial = js["sps30_serial"]
+        if "sps30_uart" in js:
+            self.sps30_uart = js["sps30_uart"]
+
+        if "zh03b_uart" in js:
+            self.zh03b_uart = js["zh03b_uart"]  # {"type": "uart", "tx":  17, "rx": 16}
 
     def load_config_sensors(self, sensors: List[str]):
         self.has_aht = False
@@ -134,6 +142,7 @@ class Sensei:
         self.has_scd4x = False
         self.has_sps30 = False
         self.has_hdc1080 = False
+        self.has_zh03b = False
 
         for sensor in sensors:
             sensor = sensor.lower()
@@ -149,6 +158,8 @@ class Sensei:
                 self.has_sps30 = True
             elif sensor in ("hdc1080",):
                 self.has_hdc1080 = True
+            elif sensor in ("zh03b",):
+                self.has_zh03b = True
 
     def print(self, msg, *args):
         self.print_cli(msg, *args)
@@ -180,79 +191,127 @@ class Sensei:
     def connect_mqtt(self):
         self.mqtt_client = self.create_mqtt_client()
 
+    def get_uart_builder(self, desc):
+        raise NotImplementedError
+
+    def connect_sgp30(self):
+        if not self.has_sgp30:
+            return
+
+        self.print(" - Connecting SGP30")
+        from ph4_sense.sensors.sgp30 import sgp30_factory
+
+        self.sgp30 = sgp30_factory(self.i2c, measure_test=True, iaq_init=False)
+        if self.sgp30:
+            # self.sgp30.set_iaq_baseline(0x8973, 0x8AAE)
+            self.sgp30.set_iaq_relative_humidity(26, 45)
+            self.sgp30.iaq_init()
+        else:
+            self.print("SGP30 not connected")
+        self.log_memory()
+
+    def connect_aht(self):
+        if not self.has_aht:
+            return
+
+        self.print("\n - Connecting AHT21")
+        from ph4_sense.sensors.athx0 import ahtx0_factory
+
+        self.aht21 = ahtx0_factory(self.i2c)
+        if not self.aht21:
+            self.print("AHT21 not connected")
+        self.log_memory()
+
+    def connect_hdc1080(self):
+        if not self.has_hdc1080:
+            return
+        self.print("\n - Connecting HDC1080")
+        from ph4_sense.sensors.hdc1080 import hdc1080_factory
+
+        self.hdc1080 = hdc1080_factory(self.i2c)
+        if not self.hdc1080:
+            self.print("HDC1080 not connected")
+        self.log_memory()
+
+    def connect_ccs811(self):
+        if not self.has_ccs811:
+            return
+
+        self.print("\n - Connecting CCS811")
+        from ph4_sense.sensors.ccs811 import css811_factory
+
+        self.ccs811 = css811_factory(self.i2c)
+        if self.ccs811:
+            pass
+        else:
+            self.print("CCS811 not connected")
+        self.log_memory()
+
+    def connect_scd4x(self):
+        if not self.has_scd4x:
+            return
+
+        self.print("\n - Connecting SCD40")
+        from ph4_sense.sensors.scd4x import scd4x_factory
+
+        self.scd4x = scd4x_factory(self.i2c)
+        if self.scd4x:
+            self.scd4x.start_periodic_measurement()
+        else:
+            self.print("SCD4x not connected")
+        self.log_memory()
+
+    def connect_sps30(self):
+        if not self.has_sps30:
+            return
+
+        self.print("\n - Connecting SPS30")
+        if self.sps30_uart:
+            from ph4_sense_py.sensors.sps30_uart_ada import SPS30AdaUart
+
+            self.sps30 = SPS30AdaUart(self.sps30_uart)
+            self.sps30.start()
+        else:
+            from ph4_sense.sensors.sps30 import sps30_factory
+
+            self.sps30 = sps30_factory(self.i2c)
+
+        if self.sps30:
+            pass
+        else:
+            self.print("SPS30 not connected")
+        self.log_memory()
+
+    def connect_zh03b(self):
+        if not self.has_zh03b:
+            return
+
+        self.print("\n - Connecting ZH03b")
+        if self.zh03b_uart:
+            from ph4_sense.sensors.zh03b_uart_base import Zh03bUartBase
+
+            self.zh03b = Zh03bUartBase(None, uart_builder=self.get_uart_builder(self.zh03b_uart))
+            self.zh03b.dormant_mode(to_dormant=False)
+            self.zh03b.set_qa()
+        else:
+            self.print("ZH03b uart is required")
+
+        if self.zh03b:
+            pass
+        else:
+            self.print("ZH03b not connected")
+        self.log_memory()
+
     def connect_sensors(self):
         self.print("\nConnecting sensors")
         try:
-            if self.has_sgp30:
-                self.print(" - Connecting SGP30")
-                from ph4_sense.sensors.sgp30 import sgp30_factory
-
-                self.sgp30 = sgp30_factory(self.i2c, measure_test=True, iaq_init=False)
-                if self.sgp30:
-                    # self.sgp30.set_iaq_baseline(0x8973, 0x8AAE)
-                    self.sgp30.set_iaq_relative_humidity(26, 45)
-                    self.sgp30.iaq_init()
-                else:
-                    self.print("SGP30 not connected")
-                self.log_memory()
-
-            if self.has_aht:
-                self.print("\n - Connecting AHT21")
-                from ph4_sense.sensors.athx0 import ahtx0_factory
-
-                self.aht21 = ahtx0_factory(self.i2c)
-                if not self.aht21:
-                    self.print("AHT21 not connected")
-                self.log_memory()
-
-            if self.has_hdc1080:
-                self.print("\n - Connecting HDC1080")
-                from ph4_sense.sensors.hdc1080 import hdc1080_factory
-
-                self.hdc1080 = hdc1080_factory(self.i2c)
-                if not self.hdc1080:
-                    self.print("HDC1080 not connected")
-                self.log_memory()
-
-            if self.has_ccs811:
-                self.print("\n - Connecting CCS811")
-                from ph4_sense.sensors.ccs811 import css811_factory
-
-                self.ccs811 = css811_factory(self.i2c)
-                if self.ccs811:
-                    pass
-                else:
-                    self.print("CCS811 not connected")
-                self.log_memory()
-
-            if self.has_scd4x:
-                self.print("\n - Connecting SCD40")
-                from ph4_sense.sensors.scd4x import scd4x_factory
-
-                self.scd4x = scd4x_factory(self.i2c)
-                if self.scd4x:
-                    self.scd4x.start_periodic_measurement()
-                else:
-                    self.print("SCD4x not connected")
-                self.log_memory()
-
-            if self.has_sps30:
-                self.print("\n - Connecting SPS30")
-                if self.sps30_serial:
-                    from ph4_sense_py.sensors.sps30_uart_ada import SPS30AdaUart
-
-                    self.sps30 = SPS30AdaUart(self.sps30_serial)
-                    self.sps30.start()
-                else:
-                    from ph4_sense.sensors.sps30 import sps30_factory
-
-                    self.sps30 = sps30_factory(self.i2c)
-
-                if self.sps30:
-                    pass
-                else:
-                    self.print("SPS30 not connected")
-                self.log_memory()
+            self.connect_sgp30()
+            self.connect_aht()
+            self.connect_hdc1080()
+            self.connect_ccs811()
+            self.connect_scd4x()
+            self.connect_sps30()
+            self.connect_zh03b()
 
             self.print("\nSensors connected")
         except Exception as e:
@@ -290,7 +349,7 @@ class Sensei:
                 pass
 
             if self.ccs811:
-                try_fnc(lambda: self.ccs811.set_environmental_data(cal_hum, cal_temp))
+                # try_fnc(lambda: self.ccs811.set_environmental_data(cal_hum, cal_temp))
                 pass
 
             self.last_tsync = time.time()
@@ -333,7 +392,7 @@ class Sensei:
             nccs_co2, nccs_tvoc = self.ccs811.read_data()
             inv_ctr = 0
 
-            if nccs_co2 is not None and 400 < nccs_co2 < 30_000:
+            if nccs_co2 is not None and 400 <= nccs_co2 < 30_000:
                 self.last_ccs811_co2 = self.ccs_co2 = nccs_co2
                 self.eavg_css811_co2.update(nccs_co2)
             else:
@@ -399,6 +458,24 @@ class Sensei:
             self.logger.debug("SPS30 err: {}".format(e), exc_info=e)
             return
 
+    def measure_zh03b(self):
+        if not self.has_zh03b or not self.zh03b:
+            return
+
+        try:
+            reading = self.zh03b.qa_read_sample()
+            if reading is None:
+                return
+
+            self.zh03b_data = reading
+            self.print("ZH03b data {}".format(self.zh03b_data))
+
+        except Exception as e:
+            self.print("Err ZH03b: ", e)
+            self.logger.error("ZH03b err: {}".format(e))
+            self.logger.debug("ZH03b err: {}".format(e), exc_info=e)
+            return
+
     def update_metrics(self):
         pass
 
@@ -425,6 +502,7 @@ class Sensei:
             self.publish_sgp30()
             self.publish_ccs811()
             self.publish_sps30()
+            self.publish_zh03b()
             self.last_pub = t
         except Exception as e:
             self.print("Error in pub:", e)
@@ -515,6 +593,19 @@ class Sensei:
 
         self.publish_payload(f"sensors/sps30{self.mqtt_sensor_suffix}", self.sps30_data)
 
+    def publish_zh03b(self):
+        if not self.zh03b or not self.zh03b_data or len(self.zh03b_data) < 3:
+            return
+
+        self.publish_payload(
+            f"sensors/zh03b{self.mqtt_sensor_suffix}",
+            {
+                "pm10": self.zh03b_data[0],
+                "pm25": self.zh03b_data[1],
+                "pm100": self.zh03b_data[2],
+            },
+        )
+
     def on_wifi_reconnect(self):
         self.print("WiFi Reconnecting")
         self.connect_wifi(force=True)
@@ -545,6 +636,7 @@ class Sensei:
         self.measure_ccs811()
         self.measure_scd4x()
         self.measure_sps30()
+        self.measure_zh03b()
         self.update_metrics()
 
         self.print(

@@ -22,6 +22,7 @@ install_requires = [
     "paho-mqtt",
     "psutil",
     "pyftdi",
+    "pyserial",
     "ph4-monitlib>=0.0.5",
 ]
 

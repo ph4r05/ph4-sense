@@ -30,6 +30,12 @@ class ICSS811:
     def reboot_to_mode(self, drive_mode=DRIVE_MODE_1SEC):
         raise NotImplementedError
 
+    def data_ready(self) -> bool:
+        raise NotImplementedError
+
+    def app_valid(self) -> bool:
+        raise NotImplementedError
+
 
 class CCS811Wrapper(ICSS811):
     def __init__(self, sensor):
@@ -82,6 +88,12 @@ class CCS811Custom(ICSS811):
     def reboot_to_mode(self, drive_mode=DRIVE_MODE_1SEC):
         self.drive_mode = drive_mode
         return self._sensor.reboot_to_mode(drive_mode)
+
+    def data_ready(self) -> bool:
+        return self._sensor.data_ready()
+
+    def app_valid(self) -> bool:
+        return self._sensor.app_valid()
 
     def reset_r(self):
         self.r_status = None

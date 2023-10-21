@@ -7,7 +7,7 @@ import sys
 import board
 import coloredlogs
 
-from ph4_sense.sense_py import SenseiPy
+from ph4_sense_py.sense_py import SenseiPy
 
 if __name__ == "__main__":
     coloredlogs.install(level=logging.INFO)

@@ -7,5 +7,7 @@
     "host": "192.168.0.1"
   },
   "udpLogger": "192.168.0.1:9998",
-  "sensorId": "livroom"
+  "sensorId": "livroom",
+  "sensors": ["ccs811", "aht21", "sgp30", "scd40", "zh03b"],
+  "zh03b_uart": {"type": "uart", "port": 2}
 }

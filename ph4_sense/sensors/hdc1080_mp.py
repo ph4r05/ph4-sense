@@ -15,7 +15,7 @@ MicroPython driver for the TI HDC1080 Temperature and Humidity sensor
 from micropython import const
 from utime import sleep
 
-from ph4_sense.sensors.i2c_base import BitRegister, RWBit, RWBits
+from ph4_sense.support.i2c_base import BitRegister, RWBit, RWBits
 
 # from micropython_hdc1080.i2c_helpers import CBits, RegisterStruct
 

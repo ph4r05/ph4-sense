@@ -8,6 +8,8 @@ import paho.mqtt.client as mqtt  # paho-mqtt
 from ph4monitlib.utils import load_config_file
 
 from ph4_sense.sense import Sensei
+from ph4_sense.support.uart_mp import UartMp
+from ph4_sense_py.support.uart import UartSerial
 
 logger = logging.getLogger(__name__)
 coloredlogs.install(level=logging.INFO)
@@ -24,6 +26,7 @@ class SenseiPy(Sensei):
         has_scd4x=True,
         has_sps30=False,
         has_hdc1080=False,
+        has_zh03b=False,
         scl_pin=None,
         sda_pin=None,
         config_file=None,
@@ -37,6 +40,7 @@ class SenseiPy(Sensei):
             has_scd4x=has_scd4x,
             has_sps30=has_sps30,
             has_hdc1080=has_hdc1080,
+            has_zh03b=has_zh03b,
             scl_pin=scl_pin,
             sda_pin=sda_pin,
         )
@@ -49,6 +53,24 @@ class SenseiPy(Sensei):
 
     def start_bus(self):
         self.i2c = busio.I2C(self.scl_pin, self.sda_pin)
+
+    def get_uart_builder(self, desc):
+        if desc["type"] == "uart":
+
+            def builder(**kwargs):
+                return UartMp(busio.UART(tx=desc["tx"] or 4, rx=desc["rx"] or 5, **kwargs))
+
+            return builder
+
+        elif desc["type"] == "serial":
+            import serial
+
+            def builder(**kwargs):
+                return UartSerial(serial.Serial(desc["port"], **kwargs))
+
+            return builder
+        else:
+            raise ValueError("Only uart and serial is supported")
 
     def connect_wifi(self, force=False):
         pass  # Not used for now

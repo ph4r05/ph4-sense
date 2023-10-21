@@ -73,7 +73,7 @@ class AdaCCS811(CCS811Wrapper):
         super().__init__(FixedCCS811(i2c_bus, address))
 
     def read_sensor_buf(self) -> Optional[bytes]:
-        if self._sensor.data_ready:  # and self._sensor.app_valid
+        if self.data_ready():  # and self._sensor.app_valid
             buf = bytearray(9)
             buf[0] = _ALG_RESULT_DATA
             with self._sensor.i2c_device as i2c:
@@ -93,6 +93,12 @@ class AdaCCS811(CCS811Wrapper):
 
     def get_drive_mode(self) -> int:
         return self._sensor.drive_mode
+
+    def data_ready(self) -> bool:
+        return self._sensor.data_ready
+
+    def app_valid(self) -> bool:
+        return self._sensor.app_valid
 
     def reboot_to_mode(self, drive_mode=DRIVE_MODE_1SEC):
         return self._sensor.reboot_to_mode(drive_mode)

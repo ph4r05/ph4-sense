@@ -19,7 +19,7 @@ class MicroCCS811(CCS811Wrapper):
         super().__init__(CCS811(i2c_bus, address))
 
     def read_sensor_buf(self) -> Optional[bytes]:
-        if self._sensor.data_ready.get():  # and self._sensor.app_valid.get()
+        if self.data_ready():  # and self._sensor.app_valid.get()
             sleep_ms(3)
             buf = self._sensor._i2c_read_words_from_cmd(_ALG_RESULT_DATA, 20, self._sensor.resp_buf8)
             return buf
@@ -39,3 +39,9 @@ class MicroCCS811(CCS811Wrapper):
 
     def reboot_to_mode(self, drive_mode=DRIVE_MODE_1SEC):
         return self._sensor.reboot_to_mode(drive_mode)
+
+    def data_ready(self) -> bool:
+        return self._sensor.data_ready.get()
+
+    def app_valid(self) -> bool:
+        return self._sensor.app_valid.get()

@@ -35,7 +35,7 @@ from micropython import const
 from utime import sleep_ms
 
 from ph4_sense.sensors.common import ccs811_err_to_str
-from ph4_sense.sensors.i2c_base import BitRegister, ROBit, ROBits, RWBit, RWBits
+from ph4_sense.support.i2c_base import BitRegister, ROBit, ROBits, RWBit, RWBits
 
 try:
     from typing import Optional
