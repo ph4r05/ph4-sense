@@ -1,9 +1,12 @@
-import utime
-from machine import I2C
-from micropython import const
-from ustruct import unpack_from
-
+from ph4_sense.adapters import const, time
 from ph4_sense.sensors.sps30_base import SPS30
+
+try:
+    from machine import I2C
+    from ustruct import unpack_from
+except ImportError:
+    from struct import unpack_from
+
 
 # __version__ = "0.0.0-auto.0"
 # __repo__ = "https://github.com/adafruit/Adafruit_CircuitPython_SPS30.git"
@@ -59,7 +62,7 @@ class SPS30_I2C(SPS30):
         self._buffer_check(6)
         self._scrunch_buffer(6)
         if self._delays:
-            utime.sleep(0.005)
+            time.sleep(0.005)
         return unpack_from(">I", self._buffer)[0]
 
     @auto_cleaning_interval.setter
@@ -77,7 +80,7 @@ class SPS30_I2C(SPS30):
             arguments=((value >> 16) & 0xFFFF, value & 0xFFFF),
         )
         if self._delays:
-            utime.sleep(0.020)
+            time.sleep(0.020)
 
     def start(self, use_floating_point=None, *, stop_first=True):
         """Send start command to the SPS30.
@@ -97,9 +100,9 @@ class SPS30_I2C(SPS30):
         mode_changed = self._set_fp_mode_fields(request_fp)
         # Data sheet states command execution time < 20ms
         if self._delays:
-            utime.sleep(0.020)
+            time.sleep(0.020)
             if (mode_changed or self._starts == 0) and self._mode_change_delay:
-                utime.sleep(self._mode_change_delay)
+                time.sleep(self._mode_change_delay)
         self._starts += 1
 
     def clean(self, *, wait=True):
@@ -111,14 +114,14 @@ class SPS30_I2C(SPS30):
         self._sps30_command(self.CMD_START_FAN_CLEANING)
         if wait:
             delay = self.FAN_CLEAN_TIME if wait is True else wait
-            utime.sleep(delay)
+            time.sleep(delay)
 
     def stop(self):
         """Send stop command to SPS30."""
         self._sps30_command(self.CMD_STOP_MEASUREMENT)
         # Data sheet states command execution time < 20ms
         if self._delays:
-            utime.sleep(0.020)
+            time.sleep(0.020)
 
     def reset(self):
         """Perform a soft reset on the SPS30, restoring default values
@@ -127,14 +130,14 @@ class SPS30_I2C(SPS30):
         self._sps30_command(self.CMD_SOFT_RESET)
         # Data sheet states command execution time < 100ms
         if self._delays:
-            utime.sleep(0.100)
+            time.sleep(0.100)
 
     def sleep(self):
         """Enters the Sleep-Mode with minimum power consumption."""
         self._sps30_command(self.CMD_SLEEP)
         # Data sheet states command execution time < 5ms
         if self._delays:
-            utime.sleep(0.005)
+            time.sleep(0.005)
 
     def wakeup(self):
         """Switch from Sleep-Mode to Idle-Mode."""
@@ -147,14 +150,14 @@ class SPS30_I2C(SPS30):
         self._sps30_command(self.CMD_WAKEUP)
         # Data sheet states command execution time < 5ms
         if self._delays:
-            utime.sleep(0.005)
+            time.sleep(0.005)
 
     def read_firmware_version(self):
         """Read firmware version returning as two element tuple."""
         self._sps30_command(self.CMD_READ_VERSION, rx_size=3, delay=0.01)
         print(self._buffer)
         self._buffer_check(3)
-        return (self._buffer[0], self._buffer[1])
+        return self._buffer[0], self._buffer[1]
 
     def read_status_register(self):
         """Read 32bit status register."""
@@ -172,7 +175,7 @@ class SPS30_I2C(SPS30):
         self._sps30_command(self.CMD_CLEAR_DEVICE_STATUS_REG)
         # Data sheet states command execution time < 5ms
         if self._delays:
-            utime.sleep(0.005)
+            time.sleep(0.005)
 
     def _set_fp_mode_fields(self, use_floating_point):
         if self._fp_mode == use_floating_point:
@@ -207,7 +210,7 @@ class SPS30_I2C(SPS30):
         print("SPS30 send", len(to_send), bytearray(to_send))
         self._i2c.writeto(self._address, memoryview(self._cmd_buffer)[:tx_size])
         if delay:
-            utime.sleep(delay)
+            time.sleep(delay)
         if rx_size != 0:
             recv_buffer = memoryview(self._buffer)[:rx_size]
             self._i2c.readfrom_into(self._address, recv_buffer)
