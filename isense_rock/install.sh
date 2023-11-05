@@ -34,6 +34,10 @@ systemctl daemon-reload
 set +ex
 echo "[+] DONE"
 
+sudo cp 99-sps30.rules /etc/udev/rules.d/99-sps30.rules
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+
 systemctl enable ph4sense.service
 
 # systemctl restart ph4sense.service
