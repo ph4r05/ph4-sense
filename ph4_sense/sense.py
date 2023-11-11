@@ -23,6 +23,7 @@ class Sensei:
         has_sps30=False,
         has_hdc1080=False,
         has_zh03b=False,
+        has_sgp41=False,
         scl_pin=22,
         sda_pin=21,
     ):
@@ -35,6 +36,7 @@ class Sensei:
         self.has_sps30 = has_sps30
         self.has_hdc1080 = has_hdc1080
         self.has_zh03b = has_zh03b
+        self.has_sgp41 = has_sgp41
         self.scl_pin = scl_pin
         self.sda_pin = sda_pin
         self.sps30_uart = None
@@ -65,6 +67,10 @@ class Sensei:
         self.eavg_sgp30_co2 = SensorFilter(median_window=5, alpha=0.2)
         self.eavg_css811_tvoc = SensorFilter(median_window=9, alpha=0.2)
         self.eavg_sgp30_tvoc = SensorFilter(median_window=5, alpha=0.2)
+        self.sgp41_filter_voc = None
+        self.sgp41_filter_nox = None
+        self.sgp41_sraw_voc = None
+        self.sgp41_sraw_nox = None
 
         self.last_ccs811_co2 = 0
         self.last_ccs811_tvoc = 0
@@ -93,6 +99,7 @@ class Sensei:
         self.mqtt_client = None
         self.udp_logger = None
         self.sgp30 = None
+        self.sgp41 = None
         self.aht21 = None
         self.ccs811 = None
         self.scd4x = None
@@ -152,6 +159,7 @@ class Sensei:
         self.has_sps30 = False
         self.has_hdc1080 = False
         self.has_zh03b = False
+        self.has_sgp41 = False
 
         for sensor in sensors:
             sensor = sensor.lower()
@@ -169,6 +177,8 @@ class Sensei:
                 self.has_hdc1080 = True
             elif sensor in ("zh03b",):
                 self.has_zh03b = True
+            elif sensor in ("sgp41", "spg41"):
+                self.has_sgp41 = True
 
     def print(self, msg, *args):
         self.print_cli(msg, *args)
@@ -217,6 +227,22 @@ class Sensei:
             self.sgp30.iaq_init()
         else:
             self.print("SGP30 not connected")
+        self.log_memory()
+
+    def connect_sgp41(self):
+        if not self.has_sgp41:
+            return
+
+        self.print(" - Connecting SGP41")
+        from ph4_sense.sensirion import NoxGasIndexAlgorithm, VocGasIndexAlgorithm
+        from ph4_sense.sensors.sgp41 import sgp41_factory
+
+        self.sgp41 = sgp41_factory(self.i2c, measure_test=True, iaq_init=False, sensor_helper=self.get_sensor_helper())
+        if self.sgp41:
+            self.sgp41_filter_voc = VocGasIndexAlgorithm(sampling_interval=self.measure_loop_ms / 1000.0)
+            self.sgp41_filter_nox = NoxGasIndexAlgorithm(sampling_interval=self.measure_loop_ms / 1000.0)
+        else:
+            self.print("SGP41 not connected")
         self.log_memory()
 
     def connect_aht(self):
@@ -315,6 +341,7 @@ class Sensei:
         self.print("\nConnecting sensors")
         try:
             self.connect_sgp30()
+            self.connect_sgp41()
             self.connect_aht()
             self.connect_hdc1080()
             self.connect_ccs811()
@@ -384,6 +411,21 @@ class Sensei:
             self.print("SGP30 err:", e)
             self.logger.error("SGP30 err: {}".format(e))
             self.logger.debug("SGP30 err: {}".format(e), exc_info=e)
+            return
+
+    def measure_sqp41(self):
+        if not self.sgp41:
+            return
+
+        try:
+            self.sgp41_sraw_voc, self.sgp41_sraw_nox = self.sgp41.measure_raw(self.humd, self.temp)
+            self.sgp41_filter_voc.process(self.sgp41_sraw_voc)
+            self.sgp41_filter_nox.process(self.sgp41_sraw_nox)
+
+        except Exception as e:
+            self.print("SGP41 err:", e)
+            self.logger.error("SGP41 err: {}".format(e))
+            self.logger.debug("SGP41 err: {}".format(e), exc_info=e)
             return
 
     def measure_ccs811(self):
@@ -509,6 +551,7 @@ class Sensei:
             self.check_wifi_ok()
             self.maybe_reconnect_mqtt()
             self.publish_sgp30()
+            self.publish_sgp41()
             self.publish_ccs811()
             self.publish_sps30()
             self.publish_zh03b()
@@ -560,6 +603,22 @@ class Sensei:
             {
                 "eCO2": self.eavg_sgp30_co2.cur,
                 "TVOC": self.eavg_sgp30_tvoc.cur,
+            },
+        )
+
+    def publish_sgp41(self):
+        if not self.sgp41:
+            return
+
+        self.publish_payload(
+            f"sensors/sgp41{self.mqtt_sensor_suffix}",
+            {
+                "NOX": self.sgp41_filter_nox.get_gas_index(),
+                "TVOC": self.sgp41_filter_voc.get_gas_index(),
+                "sraw_voc": self.sgp41_sraw_voc,
+                "sraw_nox": self.sgp41_sraw_nox,
+                "temp": self.temp,
+                "humidity": self.humd,
             },
         )
 
@@ -642,6 +701,7 @@ class Sensei:
     def measure_loop_body(self):
         self.measure_temperature()
         self.measure_sqp30()
+        self.measure_sqp41()
         self.measure_ccs811()
         self.measure_scd4x()
         self.measure_sps30()

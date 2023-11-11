@@ -26,6 +26,7 @@ class SenseiMp(Sensei):
         has_sps30=False,
         has_hdc1080=False,
         has_zh03b=False,
+        has_sgp41=False,
         scl_pin=22,
         sda_pin=21,
     ):
@@ -39,6 +40,7 @@ class SenseiMp(Sensei):
             has_sps30=has_sps30,
             has_hdc1080=has_hdc1080,
             has_zh03b=has_zh03b,
+            has_sgp41=has_sgp41,
             scl_pin=scl_pin,
             sda_pin=sda_pin,
         )
