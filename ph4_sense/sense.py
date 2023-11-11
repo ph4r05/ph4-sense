@@ -1,6 +1,7 @@
 from ph4_sense.adapters import getLogger, json, mem_stats, sleep_ms, time
 from ph4_sense.filters import ExpAverage, SensorFilter
 from ph4_sense.sensors.common import ccs811_err_to_str
+from ph4_sense.support.sensor_helper import SensorHelper
 from ph4_sense.udplogger import UdpLogger
 from ph4_sense.utils import dval, try_fnc
 
@@ -75,6 +76,7 @@ class Sensei:
         self.sps30_data = None
         self.zh03b_data = None
 
+        self.measure_loop_ms = 2_000
         self.temp_sync_timeout = 180
         self.mqtt_reconnect_timeout = 60 * 3
         self.wifi_reconnect_timeout = 60 * 3
@@ -98,12 +100,19 @@ class Sensei:
         self.hdc1080 = None
         self.zh03b = None
         self.logger = None
+        self.sensor_helper = None
 
     def set_sensor_id(self, sensor_id):
         self.mqtt_sensor_id = sensor_id or ""
         self.mqtt_sensor_suffix = f"_{self.mqtt_sensor_id}" if self.mqtt_sensor_id else ""
         self.mqtt_topic_sub = f"sensors/esp32_{self.mqtt_sensor_id}_sub"
         self.mqtt_topic = f"sensors/esp32_{self.mqtt_sensor_id}_gas"
+
+    def get_sensor_helper(self) -> SensorHelper:
+        if not self.sensor_helper:
+            self.sensor_helper = SensorHelper(logger=self.logger)
+
+        return self.sensor_helper
 
     def load_config_data(self):
         with open("config.json") as fh:
@@ -689,7 +698,7 @@ class Sensei:
         while True:
             self.maybe_reconnect_mqtt()
             self.measure_loop_body()
-            sleep_ms(2_000)
+            sleep_ms(self.measure_loop_ms)
 
 
 def main():
