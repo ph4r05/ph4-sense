@@ -29,16 +29,18 @@ Implementation Notes
 * https://github.com/adafruit/Adafruit_CircuitPython_SCD4X.git
 """
 
-import time
+from ph4_sense.adapters import const, sleep_ms
 
-import ustruct
-from machine import I2C
-from micropython import const
+try:
+    from machine import I2C
+    from ustruct import unpack_from
+except ImportError:
+    from struct import unpack_from
+
+    from busio import I2C
 
 try:
     from typing import Optional, Tuple, Union
-
-    # from busio import I2C
 except ImportError:
     pass
 
@@ -158,21 +160,21 @@ class SCD4X:
     def reinit(self) -> None:
         """Reinitializes the sensor by reloading user settings from EEPROM."""
         self.stop_periodic_measurement()
-        self._send_command(_SCD4X_REINIT, cmd_delay=0.02)
+        self._send_command(_SCD4X_REINIT, cmd_delay=20)
 
     def factory_reset(self) -> None:
         """Resets all configuration settings stored in the EEPROM and erases the
         FRC and ASC algorithm history."""
         self.stop_periodic_measurement()
-        self._send_command(_SCD4X_FACTORYRESET, cmd_delay=1.2)
+        self._send_command(_SCD4X_FACTORYRESET, cmd_delay=1200)
 
     def force_calibration(self, target_co2: int) -> None:
         """Forces the sensor to recalibrate with a given current CO2"""
         self.stop_periodic_measurement()
         self._set_command_value(_SCD4X_FORCEDRECAL, target_co2)
-        time.sleep(0.5)
+        sleep_ms(500)
         self._read_reply(self._buffer, 3)
-        correction = ustruct.unpack_from(">h", self._buffer[0:2])[0]
+        correction = unpack_from(">h", self._buffer[0:2])[0]
         if correction == 0xFFFF:
             raise RuntimeError(
                 "Forced recalibration failed.\
@@ -190,7 +192,7 @@ class SCD4X:
             saved with persist_settings().
 
         """
-        self._send_command(_SCD4X_GETASCE, cmd_delay=0.001)
+        self._send_command(_SCD4X_GETASCE, cmd_delay=1)
         self._read_reply(self._buffer, 3)
         return self._buffer[1] == 1
 
@@ -208,7 +210,7 @@ class SCD4X:
 
     def _read_data(self) -> None:
         """Reads the temp/hum/co2 from the sensor and caches it"""
-        self._send_command(_SCD4X_READMEASUREMENT, cmd_delay=0.001)
+        self._send_command(_SCD4X_READMEASUREMENT, cmd_delay=1)
         self._read_reply(self._buffer, 9)
         self._co2 = (self._buffer[0] << 8) | self._buffer[1]
         temp = (self._buffer[3] << 8) | self._buffer[4]
@@ -219,14 +221,14 @@ class SCD4X:
     @property
     def data_ready(self) -> bool:
         """Check the sensor to see if new data is available"""
-        self._send_command(_SCD4X_DATAREADY, cmd_delay=0.001)
+        self._send_command(_SCD4X_DATAREADY, cmd_delay=1)
         self._read_reply(self._buffer, 3)
         return not ((self._buffer[0] & 0x07 == 0) and (self._buffer[1] == 0))
 
     @property
     def serial_number(self) -> Tuple[int, int, int, int, int, int]:
         """Request a 6-tuple containing the unique serial number for this sensor"""
-        self._send_command(_SCD4X_SERIALNUMBER, cmd_delay=0.001)
+        self._send_command(_SCD4X_SERIALNUMBER, cmd_delay=1)
         self._read_reply(self._buffer, 9)
         return (
             self._buffer[0],
@@ -239,7 +241,7 @@ class SCD4X:
 
     def stop_periodic_measurement(self) -> None:
         """Stop measurement mode"""
-        self._send_command(_SCD4X_STOPPERIODICMEASUREMENT, cmd_delay=0.5)
+        self._send_command(_SCD4X_STOPPERIODICMEASUREMENT, cmd_delay=500)
 
     def start_periodic_measurement(self) -> None:
         """Put sensor into working mode, about 5s per measurement
@@ -269,7 +271,7 @@ class SCD4X:
 
     def persist_settings(self) -> None:
         """Save temperature offset, altitude offset, and selfcal enable settings to EEPROM"""
-        self._send_command(_SCD4X_PERSISTSETTINGS, cmd_delay=0.8)
+        self._send_command(_SCD4X_PERSISTSETTINGS, cmd_delay=800)
 
     def set_ambient_pressure(self, ambient_pressure: int) -> None:
         """Set the ambient pressure in hPa at any time to adjust CO2 calculations"""
@@ -288,7 +290,7 @@ class SCD4X:
             persist_settings().
 
         """
-        self._send_command(_SCD4X_GETTEMPOFFSET, cmd_delay=0.001)
+        self._send_command(_SCD4X_GETTEMPOFFSET, cmd_delay=1)
         self._read_reply(self._buffer, 3)
         temp = (self._buffer[0] << 8) | self._buffer[1]
         return 175.0 * temp / 2**16
@@ -310,7 +312,7 @@ class SCD4X:
             This value will NOT be saved and will be reset on boot unless saved with
             persist_settings().
         """
-        self._send_command(_SCD4X_GETALTITUDE, cmd_delay=0.001)
+        self._send_command(_SCD4X_GETALTITUDE, cmd_delay=1)
         self._read_reply(self._buffer, 3)
         return (self._buffer[0] << 8) | self._buffer[1]
 
@@ -328,7 +330,7 @@ class SCD4X:
                 raise RuntimeError("CRC check failed while reading data")
         return True
 
-    def _send_command(self, cmd: int, cmd_delay: float = 0) -> None:
+    def _send_command(self, cmd: int, cmd_delay: int = 0) -> None:
         self._cmd[0] = (cmd >> 8) & 0xFF
         self._cmd[1] = cmd & 0xFF
 
@@ -338,16 +340,16 @@ class SCD4X:
             raise RuntimeError(
                 "Could not communicate via I2C, some commands/settings unavailable while in working mode"
             ) from err
-        time.sleep(cmd_delay)
+        sleep_ms(cmd_delay)
 
-    def _set_command_value(self, cmd, value, cmd_delay=0):
+    def _set_command_value(self, cmd, value, cmd_delay: int = 0):
         self._buffer[0] = (cmd >> 8) & 0xFF
         self._buffer[1] = cmd & 0xFF
         self._crc_buffer[0] = self._buffer[2] = (value >> 8) & 0xFF
         self._crc_buffer[1] = self._buffer[3] = value & 0xFF
         self._buffer[4] = self._crc8(self._crc_buffer)
         self.i2c_device.writeto(self.address, self._buffer)
-        time.sleep(cmd_delay)
+        sleep_ms(cmd_delay)
 
     def _read_reply(self, buff, num):
         self.i2c_device.readfrom_into(self.address, buff)

@@ -7,6 +7,8 @@ try:
 except ImportError:
     from struct import unpack_from
 
+    from busio import I2C
+
 
 # __version__ = "0.0.0-auto.0"
 # __repo__ = "https://github.com/adafruit/Adafruit_CircuitPython_SPS30.git"

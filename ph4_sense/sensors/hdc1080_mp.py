@@ -12,12 +12,8 @@ MicroPython driver for the TI HDC1080 Temperature and Humidity sensor
 
 
 """
-from micropython import const
-from utime import sleep
-
+from ph4_sense.adapters import const, sleep_ms
 from ph4_sense.support.i2c_base import BitRegister, RWBit, RWBits
-
-# from micropython_hdc1080.i2c_helpers import CBits, RegisterStruct
 
 try:
     from typing import Tuple
@@ -170,7 +166,7 @@ class HDC1080:
         Reset the sensor
         """
         self._reset.set(True)  # = True
-        sleep(0.5)
+        sleep_ms(500)
 
     @property
     def measurements(self) -> Tuple[float, float]:
@@ -179,7 +175,7 @@ class HDC1080:
         """
         data = bytearray(4)
         self._i2c.writeto(self._address, bytes([_DATA]), True)
-        sleep(0.03)
+        sleep_ms(30)
         self._i2c.readfrom_into(self._address, data)
         msb_temp = data[0] << 8
         lsb_temp = data[1]
@@ -204,7 +200,7 @@ class HDC1080:
 
         data = bytearray(2)
         self._i2c.writeto(self._address, bytes([_TEMP]), False)
-        sleep(0.03)
+        sleep_ms(30)
         self._i2c.readfrom_into(self._address, data)
         msb_temp = data[0] << 8
         lsb_temp = data[1]
@@ -225,7 +221,7 @@ class HDC1080:
 
         data = bytearray(2)
         self._i2c.writeto(self._address, bytes([_HUM]), False)
-        sleep(0.03)
+        sleep_ms(30)
         self._i2c.readfrom_into(self._address, data)
         msb_hum = data[0] << 8
         lsb_hum = data[1]

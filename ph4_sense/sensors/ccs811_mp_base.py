@@ -29,18 +29,20 @@ Author(s): Dean Miller for Adafruit Industries
 """
 import math
 
-import ustruct
-from machine import I2C
-from micropython import const
-from utime import sleep_ms
-
+from ph4_sense.adapters import const, sleep_ms
 from ph4_sense.sensors.common import ccs811_err_to_str
 from ph4_sense.support.i2c_base import BitRegister, ROBit, ROBits, RWBit, RWBits
 
 try:
-    from typing import Optional
+    import ustruct
+    from machine import I2C
+except ImportError:
+    import struct as ustruct
 
-    # from busio import I2C
+    from busio import I2C
+
+try:
+    from typing import Optional
 except ImportError:
     pass
 

@@ -47,8 +47,7 @@ Implementation Notes
 
 from math import exp
 
-from micropython import const
-from utime import sleep_ms
+from ph4_sense.adapters import const, sleep_ms
 
 try:
     from typing import Union
