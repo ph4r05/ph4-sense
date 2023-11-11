@@ -177,7 +177,7 @@ class SGP30:
 
         buffer = [(tvoc >> 8) & 0xFF, tvoc & 0xFF, 0, (co2eq >> 8) & 0xFF, co2eq & 0xFF, 0]  # tvoc, crc, co2, crc
         buffer[2] = generate_crc(buffer, 0, 2)
-        buffer[5] = generate_crc(buffer, 3, 6)
+        buffer[5] = generate_crc(buffer, 3, 5)
 
         self._i2c_read_words_from_cmd(
             SGP30_CMD_SET_IAQ_BASELINE_HEX + buffer,
