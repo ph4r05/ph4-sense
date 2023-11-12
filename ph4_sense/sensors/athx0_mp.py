@@ -85,7 +85,7 @@ class AHTx0:
 
     """
 
-    def __init__(self, i2c_bus: I2C, address: int = AHTX0_I2CADDR_DEFAULT) -> None:
+    def __init__(self, i2c_bus: I2C, address: int = AHTX0_I2CADDR_DEFAULT, sensor_helper=None, **kwargs) -> None:
         self.i2c_bus = i2c_bus
         self.address = address
         self.data_buf = bytearray(6)

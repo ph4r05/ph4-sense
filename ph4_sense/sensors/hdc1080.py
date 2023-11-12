@@ -29,4 +29,4 @@ if not _HDC1080_IMPORTED:
 def hdc1080_factory(bus, address: int = 0x40, **kwargs) -> Optional[HDC1080]:
     if not _HDC1080_IMPORTED:
         return None
-    return HDC1080(bus, address)
+    return HDC1080(bus, address, **kwargs)

@@ -30,4 +30,4 @@ if not _SCD40X_IMPORTED:
 def scd4x_factory(bus, address: int = SCD4X_DEFAULT_ADDR, **kwargs) -> Optional[SCD4X]:
     if not _SCD40X_IMPORTED:
         return None
-    return SCD4X(bus, address)
+    return SCD4X(bus, address, **kwargs)

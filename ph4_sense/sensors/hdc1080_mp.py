@@ -77,7 +77,7 @@ class HDC1080:
 
     """
 
-    def __init__(self, i2c, address: int = 0x40) -> None:
+    def __init__(self, i2c, address: int = 0x40, **kwargs) -> None:
         self._i2c = i2c
         self._address = address
 

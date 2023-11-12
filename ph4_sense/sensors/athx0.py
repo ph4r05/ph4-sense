@@ -29,4 +29,4 @@ if not _AHTX0_IMPORTED:
 def ahtx0_factory(bus, address: int = 0x38, **kwargs) -> Optional[AHTx0]:
     if not _AHTX0_IMPORTED:
         return None
-    return AHTx0(bus, address)
+    return AHTx0(bus, address, **kwargs)

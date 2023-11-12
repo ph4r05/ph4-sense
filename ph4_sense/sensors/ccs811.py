@@ -32,4 +32,4 @@ def css811_factory(bus, address: int = 0x5A, **kwargs) -> Optional[CCS811Custom]
     if not _CCS811_IMPORTED:
         return None
 
-    return CCS811Custom(CSS811Adapter(bus, address))
+    return CCS811Custom(CSS811Adapter(bus, address, **kwargs), **kwargs)

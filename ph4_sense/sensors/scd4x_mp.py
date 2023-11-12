@@ -30,6 +30,7 @@ Implementation Notes
 """
 
 from ph4_sense.adapters import const, sleep_ms
+from ph4_sense.support.sensor_helper import SensorHelper
 
 try:
     from machine import I2C
@@ -105,9 +106,7 @@ class SCD4X:
 
     """
 
-    def __init__(self, i2c_bus: I2C, address: int = SCD4X_DEFAULT_ADDR) -> None:
-        print("scd4x address: %x" % (address,))
-        print("scd4x i2c_bus: ", i2c_bus)
+    def __init__(self, i2c_bus: I2C, address: int = SCD4X_DEFAULT_ADDR, sensor_helper=None, **kwargs) -> None:
         self.address = address
         self.i2c_device = i2c_bus
         self._buffer = bytearray(18)
@@ -118,6 +117,10 @@ class SCD4X:
         self._temperature: Optional[float] = None
         self._relative_humidity: Optional[float] = None
         self._co2: Optional[int] = None
+
+        self.sensor_helper = sensor_helper or SensorHelper()
+        self.sensor_helper.log_info("scd4x address: %x" % (address,))
+        self.sensor_helper.log_info("scd4x i2c_bus: %s", i2c_bus)
 
         self.stop_periodic_measurement()
 

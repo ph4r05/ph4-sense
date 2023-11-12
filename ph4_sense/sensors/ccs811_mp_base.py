@@ -188,19 +188,19 @@ class CCS811:
                 "be a problem with the firmware on your sensor. {}".format(fw_mode)
             )
 
-        self.sensor_helper.log_info("Initially looks ok, fw_mode:", fw_mode, " err:", err)
+        self.sensor_helper.log_info("Initially looks ok, fw_mode: %s, err: %s", fw_mode, err)
         self.interrupt_enabled.set(False)
         sleep_ms(_SLEEP_MS_CONST)
 
         # default to read every second
         self.drive_mode.set(drive_mode)
         sleep_ms(_SLEEP_MS_CONST)
-        self.sensor_helper.log_info("Drive mode", self.drive_mode.get())
+        self.sensor_helper.log_info("Drive mode %s", self.drive_mode.get())
 
         err = self.error.get()
         if err:
             r_error = self.error_code
-            self.sensor_helper.log_info("err", err, r_error, ccs811_err_to_str(r_error))
+            self.sensor_helper.log_info("err: %s, %s, %s", err, r_error, ccs811_err_to_str(r_error))
 
     def _i2c_read_words_from_cmd(self, command, delay, response_buffer):
         self.cmd_buf[0] = command

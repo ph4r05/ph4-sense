@@ -82,7 +82,7 @@ class SPS30_I2C(SPS30):
     def auto_cleaning_interval(self, value):
         """Write the auto cleaning interval in seconds to SPS30 nvram (0 disables feature).
 
-        Data sheet notes for firmware before verison 2.2:
+        Data sheet notes for firmware before version 2.2:
         "After writing a new interval, this will be activated immediately.
          However, if the interval register is read out after setting the
          new value, the previous value is returned until the next
@@ -168,7 +168,7 @@ class SPS30_I2C(SPS30):
     def read_firmware_version(self):
         """Read firmware version returning as two element tuple."""
         self._sps30_command(self.CMD_READ_VERSION, rx_size=3, delay=0.01)
-        self.sensor_helper.log_info("SPS30 firmware", self._buffer)
+        self.sensor_helper.log_info("SPS30 firmware: %s", self._buffer)
         self._buffer_check(3)
         return self._buffer[0], self._buffer[1]
 

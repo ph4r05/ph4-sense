@@ -49,7 +49,7 @@ class CCS811Custom(ICSS811):
     MAX_TVOC = const(32_768)
     MAX_CO2 = const(29_206)
 
-    def __init__(self, sensor: CCS811Wrapper):
+    def __init__(self, sensor: CCS811Wrapper, **kwargs):
         self._sensor = sensor
         self.drive_mode = DRIVE_MODE_1SEC
         self.r_status: Optional[int] = None

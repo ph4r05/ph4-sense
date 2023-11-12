@@ -116,7 +116,9 @@ class SGP30:
     :param boolean iaq_init: (optional) Whether to initialise SGP30 algorithm / baseline.
     """
 
-    def __init__(self, i2c, addr=SGP30_DEFAULT_I2C_ADDR, measure_test=False, iaq_init=True, sensor_helper=None):
+    def __init__(
+        self, i2c, addr=SGP30_DEFAULT_I2C_ADDR, measure_test=False, iaq_init=True, sensor_helper=None, **kwargs
+    ):
         """Initialises the sensor and display stats"""
         self._i2c = i2c
         # if addr not in self._i2c.scan():

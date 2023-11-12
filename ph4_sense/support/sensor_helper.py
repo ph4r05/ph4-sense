@@ -9,7 +9,7 @@ class SensorHelper:
 
     def __init__(self, logger=None):
         self.logger = logger
-        self.buffer = PreallocatedBuffer(max_size=24)
+        self.buffer = PreallocatedBuffer(max_size=64)
 
     def log(self, msg, *args):
         if self.logger:
