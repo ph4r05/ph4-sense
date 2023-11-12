@@ -82,6 +82,8 @@ class Sensei:
         self.sps30_data = None
         self.zh03b_data = None
 
+        self.reconnect_attempts = 25
+        self.reconnect_timeout = 500
         self.measure_loop_ms = 2_000
         self.temp_sync_timeout = 180
         self.mqtt_reconnect_timeout = 60 * 3
@@ -337,17 +339,29 @@ class Sensei:
             self.print("ZH03b not connected")
         self.log_memory()
 
+    def try_connect_sensor(self, fnc):
+        for attempt in range(self.reconnect_attempts):
+            try:
+                return fnc()
+            except Exception as e:
+                if attempt + 1 >= self.reconnect_attempts:
+                    self.logger.error(f"Could not connect sensor {fnc}, attempt {attempt}: {e}")
+                    raise
+                else:
+                    self.logger.warn(f"Could not connect sensor {fnc}, attempt {attempt}: {e}")
+                    sleep_ms(self.reconnect_timeout)
+
     def connect_sensors(self):
         self.print("\nConnecting sensors")
         try:
-            self.connect_sgp30()
-            self.connect_sgp41()
-            self.connect_aht()
-            self.connect_hdc1080()
-            self.connect_ccs811()
-            self.connect_scd4x()
-            self.connect_sps30()
-            self.connect_zh03b()
+            self.try_connect_sensor(self.connect_sgp30)
+            self.try_connect_sensor(self.connect_sgp41)
+            self.try_connect_sensor(self.connect_aht)
+            self.try_connect_sensor(self.connect_hdc1080)
+            self.try_connect_sensor(self.connect_ccs811)
+            self.try_connect_sensor(self.connect_scd4x)
+            self.try_connect_sensor(self.connect_sps30)
+            self.try_connect_sensor(self.connect_zh03b)
 
             self.print("\nSensors connected")
         except Exception as e:
