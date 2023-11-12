@@ -9,13 +9,13 @@ SCD4X = Any
 SCD4X_DEFAULT_ADDR = 0x62
 
 # Machine-dependent import
-if not _SCD40X_IMPORTED:
-    try:
-        from adafruit_scd4x import SCD4X, SCD4X_DEFAULT_ADDR  # type: ignore
-
-        _SCD40X_IMPORTED = True
-    except ImportError:
-        pass
+# if not _SCD40X_IMPORTED:
+#     try:
+#         from adafruit_scd4x import SCD4X, SCD4X_DEFAULT_ADDR  # type: ignore
+#
+#         _SCD40X_IMPORTED = True
+#     except ImportError:
+#         pass
 
 if not _SCD40X_IMPORTED:
     assert SCD4X is Any

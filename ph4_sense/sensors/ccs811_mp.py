@@ -1,8 +1,11 @@
-from machine import I2C
-
 from ph4_sense.adapters import const, sleep_ms
 from ph4_sense.sensors.ccs811_mp_base import CCS811
 from ph4_sense.sensors.ccs811base import DRIVE_MODE_1SEC, CCS811Wrapper
+
+try:
+    from machine import I2C
+except ImportError:
+    from busio import I2C
 
 try:
     from typing import Optional

@@ -9,13 +9,13 @@ _SPS30_IMPORTED_MP = False
 SPS30_I2C = Any
 
 # Machine-dependent import
-if not _SPS30_IMPORTED:
-    try:
-        from ph4_sense_py.sensors.sps30_ada import SPS30_I2C  # type: ignore
-
-        _SPS30_IMPORTED = True
-    except ImportError:
-        pass
+# if not _SPS30_IMPORTED:
+#     try:
+#         from ph4_sense_py.sensors.sps30_ada import SPS30_I2C  # type: ignore
+#
+#         _SPS30_IMPORTED = True
+#     except ImportError:
+#         pass
 
 if not _SPS30_IMPORTED:
     assert SPS30_I2C is Any

@@ -9,13 +9,13 @@ _SGP30_IMPORTED_MP = False
 SGP30 = Any
 
 # Machine-dependent import
-if not _SGP30_IMPORTED:
-    try:
-        from ph4_sense_py.sensors.sgp30_ada import AdaSGP30 as SGP30  # type: ignore
-
-        _SGP30_IMPORTED = True
-    except ImportError:
-        pass
+# if not _SGP30_IMPORTED:
+#     try:
+#         from ph4_sense_py.sensors.sgp30_ada import AdaSGP30 as SGP30  # type: ignore
+#
+#         _SGP30_IMPORTED = True
+#     except ImportError:
+#         pass
 
 if not _SGP30_IMPORTED:
     assert SGP30 is Any
