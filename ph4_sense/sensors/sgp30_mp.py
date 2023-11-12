@@ -240,7 +240,7 @@ class SGP30:
             SGP30_CMD_GET_SERIAL_ID_MAX_MS,
             SGP30_CMD_GET_SERIAL_ID_WORDS,
         )
-        return hex(int.from_bytes(bytearray(serial), "big"))
+        return serial
 
     @property
     def co2eq(self):
