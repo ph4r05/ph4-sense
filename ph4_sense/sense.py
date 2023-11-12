@@ -708,16 +708,45 @@ class Sensei:
         self.measure_zh03b()
         self.update_metrics()
 
-        self.print(
-            f"CO2eq: {dval(self.sgp30_co2eq):4.1f} (r={dval(self.eavg_sgp30_co2.cur):4.1f}) ppm, "
-            + f"TVOC: {dval(self.sgp30_tvoc):4d} ppb, "
-            + f"CCS CO2: {dval(self.ccs_co2):4d} ({dval(self.eavg_css811_co2.cur):4.1f}), "
-            + f"TVOC2: {dval(self.ccs_tvoc):3d} ({dval(self.eavg_css811_tvoc.cur):3.1f}), "
-            + f"Eth: {dval(self.eth):5d}, H2: {self.h2:5d}, {dval(self.temp):4.2f} C, {dval(self.humd):4.2f} %%, "
-            + f"SCD40: {dval(self.scd40_co2):4.2f}, {dval(self.scd40_temp):4.2f} C, {dval(self.scd40_hum):4.2f} %% "
-        )
-
+        msg = self.combine_sensor_log()
+        self.print(msg)
         self.publish()
+
+    def combine_sensor_log(self):
+        res = []
+        if self.has_sgp30:
+            res.append(
+                f"CO2eq: {dval(self.sgp30_co2eq):4.1f} (r={dval(self.eavg_sgp30_co2.cur):4.1f}) ppm, "
+                f"TVOC: {dval(self.sgp30_tvoc):4d} ppb"
+            )
+
+        if self.has_sgp41 and self.sgp41_filter_voc is not None:
+            res.append(
+                f"SGP41: {dval(self.sgp41_filter_voc.get_gas_index()):4d} (r={dval(self.sgp41_sraw_voc):5d}), "
+                f"NOX: {dval(self.sgp41_filter_nox.get_gas_index()):4d} (r={dval(self.sgp41_sraw_nox):5d})"
+            )
+
+        if self.has_ccs811 and self.ccs_co2 is not None and self.eavg_css811_co2 is not None:
+            res.append(
+                f"CCS CO2: {dval(self.ccs_co2):4d} ({dval(self.eavg_css811_co2.cur):4.1f}), "
+                f"TVOC2: {dval(self.ccs_tvoc):3d} ({dval(self.eavg_css811_tvoc.cur):3.1f})"
+            )
+
+        if self.has_sgp30 and self.eth is not None:
+            res.append(f"Eth: {dval(self.eth):5d}, H2: {self.h2:5d}")
+
+        if self.temp is not None:
+            res.append(f"{dval(self.temp):4.2f} C, {dval(self.humd):4.2f} %%")
+
+        if self.has_scd4x:
+            res.append(
+                f"SCD40: {dval(self.scd40_co2):4.2f}, {dval(self.scd40_temp):4.2f} C, {dval(self.scd40_hum):4.2f} %% "
+            )
+
+        if self.has_sps30 and self.sps30_data:
+            res.append(f"SPS30: {self.sps30_data}")
+
+        return ", ".join(res)
 
     def log_memory(self):
         stats = mem_stats()

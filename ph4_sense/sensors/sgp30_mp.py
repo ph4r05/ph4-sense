@@ -118,8 +118,8 @@ class SGP30:
     def __init__(self, i2c, addr=SGP30_DEFAULT_I2C_ADDR, measure_test=False, iaq_init=True):
         """Initialises the sensor and display stats"""
         self._i2c = i2c
-        if addr not in self._i2c.scan():
-            raise IOError("No SGP30 device found on I2C bus")
+        # if addr not in self._i2c.scan():
+        #     raise IOError("No SGP30 device found on I2C bus")
         self.addr = addr
         self.cmd_buf_2 = bytearray(2)
         self.resp_buf_6 = bytearray(6)

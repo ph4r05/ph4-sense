@@ -8,8 +8,6 @@ import paho.mqtt.client as mqtt  # paho-mqtt
 from ph4monitlib.utils import load_config_file
 
 from ph4_sense.sense import Sensei
-from ph4_sense.support.uart_mp import UartMp
-from ph4_sense_py.support.uart import UartSerial
 
 logger = logging.getLogger(__name__)
 coloredlogs.install(level=logging.INFO)
@@ -58,6 +56,7 @@ class SenseiPy(Sensei):
 
     def get_uart_builder(self, desc):
         if desc["type"] == "uart":
+            from ph4_sense.support.uart_mp import UartMp
 
             def builder(**kwargs):
                 return UartMp(busio.UART(tx=desc["tx"] or 4, rx=desc["rx"] or 5, **kwargs))
@@ -66,6 +65,8 @@ class SenseiPy(Sensei):
 
         elif desc["type"] == "serial":
             import serial
+
+            from ph4_sense_py.support.uart import UartSerial
 
             def builder(**kwargs):
                 return UartSerial(serial.Serial(desc["port"], **kwargs))
