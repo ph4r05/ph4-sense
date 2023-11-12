@@ -17,7 +17,7 @@ class Zh03bUartBase:
     https://www.winsen-sensor.com/d/files/zh03b-laser-dust-module-v2_1(2).pdf
     """
 
-    def __init__(self, uart: Optional[Uart] = None, *, uart_builder=None):
+    def __init__(self, uart: Optional[Uart] = None, *, uart_builder=None, **kwargs):
         self.uart = uart if uart is not None else uart_builder(baudrate=9600, parity=None, stop=1, bits=8, timeout=10)
         self.uart.flush_input()
 

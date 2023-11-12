@@ -1,5 +1,6 @@
 from ph4_sense.adapters import const, time
 from ph4_sense.sensors.sps30_base import SPS30
+from ph4_sense.support.sensor_helper import SensorHelper
 
 try:
     from machine import I2C
@@ -20,7 +21,16 @@ SPS30_DEFAULT_ADDR = const(0x69)
 class SPS30_I2C(SPS30):
     # pylint: disable=too-many-instance-attributes
     def __init__(
-        self, i2c: I2C, address=SPS30_DEFAULT_ADDR, *, auto_init=True, fp_mode=True, delays=True, mode_change_delay=2.5
+        self,
+        i2c: I2C,
+        address=SPS30_DEFAULT_ADDR,
+        *,
+        auto_init=True,
+        fp_mode=True,
+        delays=True,
+        mode_change_delay=2.5,
+        sensor_helper=None,
+        **kwargs
     ):
         super().__init__()
         self._i2c = i2c
@@ -35,6 +45,7 @@ class SPS30_I2C(SPS30):
         self._m_fmt = None
         self._delays = delays
         self._starts = 0
+        self.sensor_helper = sensor_helper or SensorHelper()
         _ = self._set_fp_mode_fields(fp_mode)
 
         if auto_init:
@@ -157,7 +168,7 @@ class SPS30_I2C(SPS30):
     def read_firmware_version(self):
         """Read firmware version returning as two element tuple."""
         self._sps30_command(self.CMD_READ_VERSION, rx_size=3, delay=0.01)
-        print(self._buffer)
+        self.sensor_helper.log_info("SPS30 firmware", self._buffer)
         self._buffer_check(3)
         return self._buffer[0], self._buffer[1]
 
@@ -209,14 +220,14 @@ class SPS30_I2C(SPS30):
         # does not like it based on real tests using self._CMD_READ_VERSION
         # This is probably due to lack of support for i2c repeated start
         to_send = memoryview(self._cmd_buffer)[:tx_size]
-        print("SPS30 send", len(to_send), bytearray(to_send))
-        self._i2c.writeto(self._address, memoryview(self._cmd_buffer)[:tx_size])
+        # self.sensor_helper.log_info("SPS30 send", len(to_send), bytearray(to_send))
+        self._i2c.writeto(self._address, to_send)
         if delay:
             time.sleep(delay)
         if rx_size != 0:
             recv_buffer = memoryview(self._buffer)[:rx_size]
             self._i2c.readfrom_into(self._address, recv_buffer)
-            print("SPS30 received", bytearray(recv_buffer))
+            # self.sensor_helper.log_info("SPS30 received", bytearray(recv_buffer))
 
         if retry:
             pass  # implement retries with appropriate exception handling

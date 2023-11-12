@@ -42,7 +42,7 @@ from ph4_sense.sensors.sps30_base import SPS30
 
 class SPS30AdaUart(SPS30):
     # TODO: unify interface with i2c
-    def __init__(self, port):
+    def __init__(self, port, **kwargs):
         super().__init__()
         self.port = port
         self.ser = serial.Serial(self.port, baudrate=115200, stopbits=1, parity="N", timeout=2)

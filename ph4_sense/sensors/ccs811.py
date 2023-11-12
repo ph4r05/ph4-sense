@@ -28,7 +28,7 @@ if not _CCS811_IMPORTED:
         print("CCS811 import error:", e)
 
 
-def css811_factory(bus, address: int = 0x5A) -> Optional[CCS811Custom]:
+def css811_factory(bus, address: int = 0x5A, **kwargs) -> Optional[CCS811Custom]:
     if not _CCS811_IMPORTED:
         return None
 

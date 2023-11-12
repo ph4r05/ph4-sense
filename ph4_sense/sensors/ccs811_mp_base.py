@@ -32,6 +32,7 @@ import math
 from ph4_sense.adapters import const, sleep_ms
 from ph4_sense.sensors.common import ccs811_err_to_str
 from ph4_sense.support.i2c_base import BitRegister, ROBit, ROBits, RWBit, RWBits
+from ph4_sense.support.sensor_helper import SensorHelper
 
 try:
     import ustruct
@@ -117,9 +118,12 @@ class CCS811:
     temp_offset = 0.0
     """Temperature offset."""
 
-    def __init__(self, i2c_bus: I2C, address: int = 0x5A, drive_mode=DRIVE_MODE_1SEC) -> None:
+    def __init__(
+        self, i2c_bus: I2C, address: int = 0x5A, drive_mode=DRIVE_MODE_1SEC, sensor_helper=None, **kwargs
+    ) -> None:
         self.i2c_bus = i2c_bus
         self.address = address
+        self.sensor_helper = sensor_helper or SensorHelper()
 
         # set up the registers
         register_status = BitRegister(i2c_bus, address, 0x00, 1)
@@ -155,13 +159,13 @@ class CCS811:
             )
 
         hw_ver = register_hw_ver.read()
-        print(f"CCS811 hw ver: {hex(hw_ver[0])}")
+        self.sensor_helper.log_info(f"CCS811 hw ver: {hex(hw_ver[0])}")
 
         boot_ver = register_fw_boot_ver.read()
-        print(f"CCS811 boot ver: {hex(boot_ver[0])}{hex(boot_ver[1])}")
+        self.sensor_helper.log_info(f"CCS811 boot ver: {hex(boot_ver[0])}{hex(boot_ver[1])}")
 
         app_ver = register_fw_app_ver.read()
-        print(f"CCS811 app ver: {hex(app_ver[0])}{hex(app_ver[1])}")
+        self.sensor_helper.log_info(f"CCS811 app ver: {hex(app_ver[0])}{hex(app_ver[1])}")
 
         # try to start the app
         self._i2c_read_words_from_cmd(_BOOTLOADER_APP_START, 150, None)
@@ -170,7 +174,7 @@ class CCS811:
         err = self.error.get()
         if err:
             r_error = self.error_code  # clears error flag
-            print(
+            self.sensor_helper.log_info(
                 "CCS811 Error: Device returned an error! Try removing and reapplying power to "
                 "the device and running the code again. Err: {}, err: {}, str: {}".format(
                     err, r_error, ccs811_err_to_str(r_error)
@@ -184,19 +188,19 @@ class CCS811:
                 "be a problem with the firmware on your sensor. {}".format(fw_mode)
             )
 
-        print("Initially looks ok, fw_mode:", fw_mode, " err:", err)
+        self.sensor_helper.log_info("Initially looks ok, fw_mode:", fw_mode, " err:", err)
         self.interrupt_enabled.set(False)
         sleep_ms(_SLEEP_MS_CONST)
 
         # default to read every second
         self.drive_mode.set(drive_mode)
         sleep_ms(_SLEEP_MS_CONST)
-        print("Drive mode", self.drive_mode.get())
+        self.sensor_helper.log_info("Drive mode", self.drive_mode.get())
 
         err = self.error.get()
         if err:
             r_error = self.error_code
-            print("err", err, r_error, ccs811_err_to_str(r_error))
+            self.sensor_helper.log_info("err", err, r_error, ccs811_err_to_str(r_error))
 
     def _i2c_read_words_from_cmd(self, command, delay, response_buffer):
         self.cmd_buf[0] = command

@@ -18,8 +18,8 @@ _ALG_RESULT_DATA = const(0x02)
 
 
 class MicroCCS811(CCS811Wrapper):
-    def __init__(self, i2c_bus: I2C, address: int = 0x5A) -> None:
-        super().__init__(CCS811(i2c_bus, address))
+    def __init__(self, i2c_bus: I2C, address: int = 0x5A, **kwargs) -> None:
+        super().__init__(CCS811(i2c_bus, address, **kwargs))
 
     def read_sensor_buf(self) -> Optional[bytes]:
         if self.data_ready():  # and self._sensor.app_valid.get()

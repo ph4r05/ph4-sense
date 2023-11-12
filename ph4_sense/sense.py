@@ -222,7 +222,7 @@ class Sensei:
         self.print(" - Connecting SGP30")
         from ph4_sense.sensors.sgp30 import sgp30_factory
 
-        self.sgp30 = sgp30_factory(self.i2c, measure_test=True, iaq_init=False)
+        self.sgp30 = sgp30_factory(self.i2c, measure_test=True, iaq_init=False, sensor_helper=self.get_sensor_helper())
         if self.sgp30:
             # self.sgp30.set_iaq_baseline(0x8973, 0x8AAE)
             self.sgp30.set_iaq_relative_humidity(26, 45)
@@ -254,7 +254,7 @@ class Sensei:
         self.print("\n - Connecting AHT21")
         from ph4_sense.sensors.athx0 import ahtx0_factory
 
-        self.aht21 = ahtx0_factory(self.i2c)
+        self.aht21 = ahtx0_factory(self.i2c, sensor_helper=self.get_sensor_helper())
         if not self.aht21:
             self.print("AHT21 not connected")
         self.log_memory()
@@ -265,7 +265,7 @@ class Sensei:
         self.print("\n - Connecting HDC1080")
         from ph4_sense.sensors.hdc1080 import hdc1080_factory
 
-        self.hdc1080 = hdc1080_factory(self.i2c)
+        self.hdc1080 = hdc1080_factory(self.i2c, sensor_helper=self.get_sensor_helper())
         if not self.hdc1080:
             self.print("HDC1080 not connected")
         self.log_memory()
@@ -277,7 +277,7 @@ class Sensei:
         self.print("\n - Connecting CCS811")
         from ph4_sense.sensors.ccs811 import css811_factory
 
-        self.ccs811 = css811_factory(self.i2c)
+        self.ccs811 = css811_factory(self.i2c, sensor_helper=self.get_sensor_helper())
         if self.ccs811:
             pass
         else:
@@ -291,7 +291,7 @@ class Sensei:
         self.print("\n - Connecting SCD40")
         from ph4_sense.sensors.scd4x import scd4x_factory
 
-        self.scd4x = scd4x_factory(self.i2c)
+        self.scd4x = scd4x_factory(self.i2c, sensor_helper=self.get_sensor_helper())
         if self.scd4x:
             self.scd4x.start_periodic_measurement()
         else:
@@ -306,12 +306,12 @@ class Sensei:
         if self.sps30_uart:
             from ph4_sense_py.sensors.sps30_uart_ada import SPS30AdaUart
 
-            self.sps30 = SPS30AdaUart(self.sps30_uart)
+            self.sps30 = SPS30AdaUart(self.sps30_uart, sensor_helper=self.get_sensor_helper())
             self.sps30.start()
         else:
             from ph4_sense.sensors.sps30 import sps30_factory
 
-            self.sps30 = sps30_factory(self.i2c)
+            self.sps30 = sps30_factory(self.i2c, sensor_helper=self.get_sensor_helper())
 
         if self.sps30:
             pass
@@ -327,7 +327,9 @@ class Sensei:
         if self.zh03b_uart:
             from ph4_sense.sensors.zh03b_uart_base import Zh03bUartBase
 
-            self.zh03b = Zh03bUartBase(None, uart_builder=self.get_uart_builder(self.zh03b_uart))
+            self.zh03b = Zh03bUartBase(
+                None, uart_builder=self.get_uart_builder(self.zh03b_uart), sensor_helper=self.get_sensor_helper()
+            )
             self.zh03b.dormant_mode(to_dormant=False)
             self.zh03b.set_qa()
         else:

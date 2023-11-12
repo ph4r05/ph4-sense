@@ -26,7 +26,7 @@ if not _AHTX0_IMPORTED:
         print("AHTx0 import error:", e)
 
 
-def ahtx0_factory(bus, address: int = 0x38) -> Optional[AHTx0]:
+def ahtx0_factory(bus, address: int = 0x38, **kwargs) -> Optional[AHTx0]:
     if not _AHTX0_IMPORTED:
         return None
     return AHTx0(bus, address)

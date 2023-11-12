@@ -48,6 +48,7 @@ Implementation Notes
 from math import exp
 
 from ph4_sense.adapters import const, sleep_ms
+from ph4_sense.support.sensor_helper import SensorHelper
 
 try:
     from typing import Union
@@ -115,7 +116,7 @@ class SGP30:
     :param boolean iaq_init: (optional) Whether to initialise SGP30 algorithm / baseline.
     """
 
-    def __init__(self, i2c, addr=SGP30_DEFAULT_I2C_ADDR, measure_test=False, iaq_init=True):
+    def __init__(self, i2c, addr=SGP30_DEFAULT_I2C_ADDR, measure_test=False, iaq_init=True, sensor_helper=None):
         """Initialises the sensor and display stats"""
         self._i2c = i2c
         # if addr not in self._i2c.scan():
@@ -124,16 +125,17 @@ class SGP30:
         self.cmd_buf_2 = bytearray(2)
         self.resp_buf_6 = bytearray(6)
         self.repl_buf_2 = [0, 0]
+        self.sensor_helper = sensor_helper or SensorHelper()
 
         self.serial = self.get_serial()
         self.feature_set = self.get_feature_set()
         if measure_test:
             test_result = self.measure_test()
             if SGP30_MEASURE_TEST_PASS != test_result:
-                print("Err: Device failed the on-chip test: ", hex(test_result))
+                self.sensor_helper.log_error("Err: Device failed the on-chip test: ", hex(test_result))
                 # raise RuntimeError("Device failed the on-chip test")
 
-        print(
+        self.sensor_helper.log_info(
             "SGP30 device discovered...\n"
             + "I2C address: "
             + str(self.addr)
@@ -296,10 +298,10 @@ class SGP30:
             return None
 
         buf_size = reply_size * (SGP30_WORD_LEN + 1)
-        crc_result = self.resp_buf_6 if buf_size == 6 else bytearray(buf_size)
+        crc_result = self.resp_buf_6 if buf_size == len(self.resp_buf_6) else bytearray(buf_size)
         self._i2c.readfrom_into(self.addr, crc_result)
 
-        result = self.repl_buf_2 if reply_size == 2 else [0] * reply_size
+        result = self.repl_buf_2 if reply_size == len(self.repl_buf_2) else [0] * reply_size
         for i in range(reply_size):
             if generate_crc(crc_result, 3 * i, 3 * i + 2) != crc_result[3 * i + 2]:
                 raise RuntimeError("CRC Error")

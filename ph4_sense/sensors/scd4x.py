@@ -27,7 +27,7 @@ if not _SCD40X_IMPORTED:
         print("SCD40X import error:", e)
 
 
-def scd4x_factory(bus, address: int = SCD4X_DEFAULT_ADDR) -> Optional[SCD4X]:
+def scd4x_factory(bus, address: int = SCD4X_DEFAULT_ADDR, **kwargs) -> Optional[SCD4X]:
     if not _SCD40X_IMPORTED:
         return None
     return SCD4X(bus, address)
