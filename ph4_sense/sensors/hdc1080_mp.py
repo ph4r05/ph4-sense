@@ -174,7 +174,7 @@ class HDC1080:
         Return Temperature in Celsius and Relative humidity in rh%
         """
         data = bytearray(4)
-        self._i2c.writeto(self._address, bytes([_DATA]), True)
+        self._i2c.writeto(self._address, bytes([_DATA]), stop=True)
         sleep_ms(30)
         self._i2c.readfrom_into(self._address, data)
         msb_temp = data[0] << 8
@@ -199,7 +199,7 @@ class HDC1080:
             self._operation_mode.set(False)
 
         data = bytearray(2)
-        self._i2c.writeto(self._address, bytes([_TEMP]), False)
+        self._i2c.writeto(self._address, bytes([_TEMP]), stop=False)
         sleep_ms(30)
         self._i2c.readfrom_into(self._address, data)
         msb_temp = data[0] << 8
@@ -220,7 +220,7 @@ class HDC1080:
             self._operation_mode.set(False)
 
         data = bytearray(2)
-        self._i2c.writeto(self._address, bytes([_HUM]), False)
+        self._i2c.writeto(self._address, bytes([_HUM]), stop=False)
         sleep_ms(30)
         self._i2c.readfrom_into(self._address, data)
         msb_hum = data[0] << 8
