@@ -90,11 +90,19 @@ class SGP41:
             + "Initialise algo: "
             + str(iaq_init)
         )
+
         if iaq_init:
             self.sensor_helper.log_info("Initializing...")
             self.execute_conditioning()
-            sleep_ms(10_000)
-            self.measure_raw()
+            sleep_ms(9_000)
+
+            # Make sure we switch from conditioning to another state not to damage the sensor
+            for _ in range(150):
+                try:
+                    self.measure_raw()
+                    return
+                except Exception as e:
+                    self.sensor_helper.log_error(f"Measurement fail: {e}")
 
     def measure_raw(self, rh: Optional[float] = None, temp: Optional[float] = None):
         """

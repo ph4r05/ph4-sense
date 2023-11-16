@@ -239,7 +239,7 @@ class Sensei:
         from ph4_sense.sensirion import NoxGasIndexAlgorithm, VocGasIndexAlgorithm
         from ph4_sense.sensors.sgp41 import sgp41_factory
 
-        self.sgp41 = sgp41_factory(self.i2c, measure_test=True, iaq_init=False, sensor_helper=self.get_sensor_helper())
+        self.sgp41 = sgp41_factory(self.i2c, measure_test=True, iaq_init=True, sensor_helper=self.get_sensor_helper())
         if self.sgp41:
             self.sgp41_filter_voc = VocGasIndexAlgorithm(sampling_interval=self.measure_loop_ms / 1000.0)
             self.sgp41_filter_nox = NoxGasIndexAlgorithm(sampling_interval=self.measure_loop_ms / 1000.0)
@@ -517,7 +517,6 @@ class Sensei:
         try:
             if self.sps30.data_available:
                 self.sps30_data = self.sps30.read()
-                self.print("SPS30 data {}".format(self.sps30_data))
 
         except Exception as e:
             self.print("Err SPS30: ", e)
