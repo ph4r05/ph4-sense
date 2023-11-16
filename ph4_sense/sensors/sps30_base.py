@@ -31,7 +31,7 @@ class SPS30:
         "pc100um",
         "tps",
     )
-    DEFAULT_RETRIES = const(2)
+    DEFAULT_RETRIES = const(1)
 
     # SPS30 min firmware version in comments if not V1.0
     CMD_START_MEASUREMENT = const(0x0010)
@@ -55,8 +55,8 @@ class SPS30:
     STATUS_FAN_CLEANING = const(1 << 19)  # undocumented
     STATUS_FAN_SPEED_WARNING = const(1 << 21)
 
-    # time in seconds for clean operation to complete
-    FAN_CLEAN_TIME = const(15)
+    # time in mseconds for clean operation to complete
+    FAN_CLEAN_TIME = const(15_000)
     _WRONG_CLASS_TXT = "Object must be instantiated as an SPS30_I2C or SPS30_UART"
 
     def __init__(self):

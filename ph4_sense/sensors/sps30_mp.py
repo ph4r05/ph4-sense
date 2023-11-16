@@ -1,4 +1,4 @@
-from ph4_sense.adapters import const, time
+from ph4_sense.adapters import const, sleep_ms
 from ph4_sense.sensors.sps30_base import SPS30
 from ph4_sense.support.sensor_helper import SensorHelper
 
@@ -28,9 +28,9 @@ class SPS30_I2C(SPS30):
         auto_init=True,
         fp_mode=True,
         delays=True,
-        mode_change_delay=2.5,
+        mode_change_delay=3500,
         sensor_helper=None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__()
         self._i2c = i2c
@@ -46,14 +46,16 @@ class SPS30_I2C(SPS30):
         self._delays = delays
         self._starts = 0
         self.sensor_helper = sensor_helper or SensorHelper()
+        self.last_response = None
         _ = self._set_fp_mode_fields(fp_mode)
 
         if auto_init:
             # Send wake-up in case device was left in low power sleep mode
             self.wakeup()
-            self.start(fp_mode)
+            self.reset()
+            self.start(fp_mode, stop_first=False)
 
-        # self.firmware_version = self.read_firmware_version()
+        self.firmware_version = self.read_firmware_version()
 
     @property
     def data_available(self):
@@ -75,7 +77,7 @@ class SPS30_I2C(SPS30):
         self._buffer_check(6)
         self._scrunch_buffer(6)
         if self._delays:
-            time.sleep(0.005)
+            sleep_ms(5)
         return unpack_from(">I", self._buffer)[0]
 
     @auto_cleaning_interval.setter
@@ -93,7 +95,7 @@ class SPS30_I2C(SPS30):
             arguments=((value >> 16) & 0xFFFF, value & 0xFFFF),
         )
         if self._delays:
-            time.sleep(0.020)
+            sleep_ms(20)
 
     def start(self, use_floating_point=None, *, stop_first=True):
         """Send start command to the SPS30.
@@ -113,9 +115,9 @@ class SPS30_I2C(SPS30):
         mode_changed = self._set_fp_mode_fields(request_fp)
         # Data sheet states command execution time < 20ms
         if self._delays:
-            time.sleep(0.020)
+            sleep_ms(20)
             if (mode_changed or self._starts == 0) and self._mode_change_delay:
-                time.sleep(self._mode_change_delay)
+                sleep_ms(self._mode_change_delay)
         self._starts += 1
 
     def clean(self, *, wait=True):
@@ -127,14 +129,14 @@ class SPS30_I2C(SPS30):
         self._sps30_command(self.CMD_START_FAN_CLEANING)
         if wait:
             delay = self.FAN_CLEAN_TIME if wait is True else wait
-            time.sleep(delay)
+            sleep_ms(delay)
 
     def stop(self):
         """Send stop command to SPS30."""
         self._sps30_command(self.CMD_STOP_MEASUREMENT)
         # Data sheet states command execution time < 20ms
         if self._delays:
-            time.sleep(0.020)
+            sleep_ms(50)
 
     def reset(self):
         """Perform a soft reset on the SPS30, restoring default values
@@ -143,14 +145,14 @@ class SPS30_I2C(SPS30):
         self._sps30_command(self.CMD_SOFT_RESET)
         # Data sheet states command execution time < 100ms
         if self._delays:
-            time.sleep(0.100)
+            sleep_ms(100)
 
     def sleep(self):
         """Enters the Sleep-Mode with minimum power consumption."""
         self._sps30_command(self.CMD_SLEEP)
         # Data sheet states command execution time < 5ms
         if self._delays:
-            time.sleep(0.005)
+            sleep_ms(5)
 
     def wakeup(self):
         """Switch from Sleep-Mode to Idle-Mode."""
@@ -163,11 +165,11 @@ class SPS30_I2C(SPS30):
         self._sps30_command(self.CMD_WAKEUP)
         # Data sheet states command execution time < 5ms
         if self._delays:
-            time.sleep(0.005)
+            sleep_ms(5)
 
     def read_firmware_version(self):
         """Read firmware version returning as two element tuple."""
-        self._sps30_command(self.CMD_READ_VERSION, rx_size=3, delay=0.01)
+        self._sps30_command(self.CMD_READ_VERSION, rx_size=3, delay=10)
         self.sensor_helper.log_info("SPS30 firmware: %s", self._buffer)
         self._buffer_check(3)
         return self._buffer[0], self._buffer[1]
@@ -188,7 +190,7 @@ class SPS30_I2C(SPS30):
         self._sps30_command(self.CMD_CLEAR_DEVICE_STATUS_REG)
         # Data sheet states command execution time < 5ms
         if self._delays:
-            time.sleep(0.005)
+            sleep_ms(5)
 
     def _set_fp_mode_fields(self, use_floating_point):
         if self._fp_mode == use_floating_point:
@@ -200,7 +202,7 @@ class SPS30_I2C(SPS30):
         self._m_fmt = ">" + ("f" if self._fp_mode else "H") * len(self.FIELD_NAMES)
         return True
 
-    def _sps30_command(self, command, arguments=None, *, rx_size=0, retry=SPS30.DEFAULT_RETRIES, delay: float = 0.0):
+    def _base_sps30_command(self, command, arguments=None, *, rx_size=0, delay: int = 5):
         """Set rx_size to None to read arbitrary amount of data up to max of _buffer size"""
         self._cmd_buffer[0] = (command >> 8) & 0xFF
         self._cmd_buffer[1] = command & 0xFF
@@ -220,17 +222,26 @@ class SPS30_I2C(SPS30):
         # does not like it based on real tests using self._CMD_READ_VERSION
         # This is probably due to lack of support for i2c repeated start
         to_send = memoryview(self._cmd_buffer)[:tx_size]
-        # self.sensor_helper.log_info("SPS30 send", len(to_send), bytearray(to_send))
+        # self.sensor_helper.log_info("SPS30 send %s %s", len(to_send), bytearray(to_send))
         self._i2c.writeto(self._address, to_send)
         if delay:
-            time.sleep(delay)
+            sleep_ms(delay)
         if rx_size != 0:
             recv_buffer = memoryview(self._buffer)[:rx_size]
             self._i2c.readfrom_into(self._address, recv_buffer)
-            # self.sensor_helper.log_info("SPS30 received", bytearray(recv_buffer))
+            # self.last_response = bytearray(recv_buffer)
+            # self.sensor_helper.log_info("SPS30 received %s", self.last_response)
 
-        if retry:
-            pass  # implement retries with appropriate exception handling
+    def _sps30_command(self, command, arguments=None, *, rx_size=0, retry=SPS30.DEFAULT_RETRIES, delay: int = 5):
+        for attempt in range(retry):
+            try:
+                return self._base_sps30_command(command, arguments, rx_size=rx_size, delay=delay)
+            except Exception as e:
+                self.sensor_helper.log_error(f"Attempt {attempt} failed {e}")
+                if attempt + 1 >= retry:
+                    raise
+                else:
+                    continue
 
     def _read_into_buffer(self):
         data_len = self._m_total_size
@@ -259,6 +270,9 @@ class SPS30_I2C(SPS30):
 
         for st_chunk in range(0, raw_data_len, 3):
             if self._buffer[st_chunk + 2] != self._crc8(self._buffer, st_chunk, st_chunk + 2):
+                self.sensor_helper.log_error(
+                    f"CRC mismatch, dl {raw_data_len}, buffer: {memoryview(self._buffer)[:raw_data_len]}"
+                )
                 raise RuntimeError("CRC mismatch in data at offset " + str(st_chunk))
 
     @staticmethod
