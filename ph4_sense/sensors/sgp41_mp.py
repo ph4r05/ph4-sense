@@ -103,6 +103,7 @@ class SGP41:
                     return
                 except Exception as e:
                     self.sensor_helper.log_error(f"Measurement fail: {e}")
+                    sleep_ms(25)
 
     def measure_raw(self, rh: Optional[float] = None, temp: Optional[float] = None):
         """

@@ -84,6 +84,8 @@ class Sensei:
 
         self.reconnect_attempts = 25
         self.reconnect_timeout = 500
+        self.measure_attempts = 3
+        self.measure_timeout = 100
         self.measure_loop_ms = 2_000
         self.temp_sync_timeout = 180
         self.mqtt_reconnect_timeout = 60 * 3
@@ -214,6 +216,18 @@ class Sensei:
 
     def get_uart_builder(self, desc):
         raise NotImplementedError
+
+    def try_measure(self, fnc):
+        for attempt in range(self.measure_attempts):
+            try:
+                return fnc()
+            except Exception as e:
+                if attempt + 1 >= self.measure_attempts:
+                    self.logger.error(f"Could not measure sensor {fnc}, attempt {attempt}: {e}")
+                    raise
+                else:
+                    self.logger.warn(f"Could not measure sensor {fnc}, attempt {attempt}: {e}")
+                    sleep_ms(self.measure_timeout)
 
     def connect_sgp30(self):
         if not self.has_sgp30:
@@ -514,9 +528,13 @@ class Sensei:
     def measure_sps30(self):
         if not self.has_sps30 or not self.sps30:
             return
-        try:
+
+        def sps30_measure_body():
             if self.sps30.data_available:
                 self.sps30_data = self.sps30.read()
+
+        try:
+            self.try_measure(sps30_measure_body)
 
         except Exception as e:
             self.print("Err SPS30: ", e)
