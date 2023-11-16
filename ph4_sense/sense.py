@@ -82,10 +82,10 @@ class Sensei:
         self.sps30_data = None
         self.zh03b_data = None
 
-        self.reconnect_attempts = 25
+        self.reconnect_attempts = 40
         self.reconnect_timeout = 500
-        self.measure_attempts = 3
-        self.measure_timeout = 100
+        self.measure_attempts = 5
+        self.measure_timeout = 150
         self.measure_loop_ms = 2_000
         self.temp_sync_timeout = 180
         self.mqtt_reconnect_timeout = 60 * 3

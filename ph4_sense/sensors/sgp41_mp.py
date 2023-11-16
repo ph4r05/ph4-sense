@@ -94,7 +94,7 @@ class SGP41:
         if iaq_init:
             self.sensor_helper.log_info("Initializing...")
             self.execute_conditioning()
-            sleep_ms(9_000)
+            sleep_ms(5_000)
 
             # Make sure we switch from conditioning to another state not to damage the sensor
             for _ in range(150):
