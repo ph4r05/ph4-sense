@@ -12,6 +12,7 @@ Sensei samples connected sensors, sending readings over MQTT to a connector plac
 Supports:
 - Python (RPi / busio)
 - [Micropython] (ESP32)
+
 with the same code.
 
 Supported sensors, connected over I²C bus:
