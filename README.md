@@ -14,14 +14,14 @@ Supports:
 - [Micropython] (ESP32)
 with the same code.
 
-Supported sensors, connected over I₂C bus:
+Supported sensors, connected over I²C bus:
 - [SGP30] TVOC & eCO2 sensor (ethanol, H₂). CO2 is not measured directly, estimated based on Ethanol/H₂. Now end of life. Successor: SGP4x.
 - [SGP41] TVOC & NOx sensor (2 pixel-arrays, MOx, ethanol / NO₂), post-processing via [Sensirion Gas Index Algorithm](https://github.com/ph4r05/ph4-sensirion-gas-index-algorithm-py)
 - [CCS811] Metal oxide (MOX) gas sensor to detect a wide range of Volatile Organic Compounds (VOCs). Produces: VOC (eTVOC) and equivalent CO2 (eCO2) values, where the main cause of VOCs is from humans.
 - [SCD41] High CO₂ accuracy with extended measurement range and low power modes. Measures CO₂ directly.
 - [ATHx0] Temperature and humidity sensor
 - [HDC1080] Temperature and humidity sensor, often paired with CCS811 chip on a single board
-- [SPS30] laser-based particular matter detector, PM1, PM2.5, PM4, PM10. Supports both I₂C and UART.
+- [SPS30] laser-based particular matter detector, PM1, PM2.5, PM4, PM10. Supports both I²C and UART.
 - [ZH03b] laser-based particular matter detector, PM1, PM2.5, PM4, PM10 (SPS30 seems to be better). Support UART only.
 
 ## Practical use
@@ -44,14 +44,14 @@ ESP32 config is json (yaml not supported). ESP32 supports connecting to the WiFi
 ## Circuitry
 
 ### Pull-up resistors
-I₂C bus requires [pull-up](https://rheingoldheavy.com/i2c-pull-resistors/) resistors to operate correctly.
+I²C bus requires [pull-up](https://rheingoldheavy.com/i2c-pull-resistors/) resistors to operate correctly.
 By default, pull-up pulls SDA and SCL lines to logical 1, sensors then pull line to the ground to change state to 0.
 
 If the pull-up resistor is too high, signal recovers from 0 to 1 too slowly. If resistor is too low, current flowing through
 the sensor when transmitting 0 may be too high and either damage the sensor or cause unreliable communication.
 
 Almost all sensor boards available on the market usually already contain 10k pull-up resistors.
-The problem is when connecting more sensors to a single I₂C bus. Resistors form a parallel resistor circuit, lowering
+The problem is when connecting more sensors to a single I²C bus. Resistors form a parallel resistor circuit, lowering
 overall resistance. I.e., the whole setup stops working after reaching number of sensors.
 
 $$ R_{\text{total}} = \frac{R}{N} $$
@@ -69,7 +69,7 @@ $$
 $$
 
 ### Capacitance
-I₂C has capacitance limit 400 pF. With higher values, speed of voltage transition degrades, causing bus to be unreliable.
+I²C has capacitance limit 400 pF. With higher values, speed of voltage transition degrades, causing bus to be unreliable.
 
 For sensing purpose it is recommended to use lower bus speeds, e.g., 100k HZ. Lower the frequency, higher the tolerance
 to the capacitance.
@@ -81,9 +81,9 @@ Higher capacitance can be into some degree compensated with lower pull-up. But a
 If more sensors needs to be connected to a single bus, or it is needed to combine sensors operating on various bus speeds
 or voltages, the following can be used:
 
-- Bus repeaters [PCA9515A](https://www.nxp.com/docs/en/data-sheet/PCA9515A.pdf). While retaining all the operating modes and features of the I₂C-bus system, it permits extension of the I₂C-bus by buffering both the data (SDA) and the clock (SCL) lines, thus enabling two buses of 400 pF.
+- Bus repeaters [PCA9515A](https://www.nxp.com/docs/en/data-sheet/PCA9515A.pdf). While retaining all the operating modes and features of the I²C-bus system, it permits extension of the I²C-bus by buffering both the data (SDA) and the clock (SCL) lines, thus enabling two buses of 400 pF.
 - Bus multiplexers [TCA9548A](https://www.ti.com/lit/ds/symlink/tca9548a.pdf). More powerful than bus extender. Also enables to connect multiple devices with the same address.
-- Level shifters: When adding another sensors operating on different voltage levels, a [level shifter](https://cdn-shop.adafruit.com/datasheets/an97055.pdf) may be needed for 3.3V and 5V sensors to operate on the same I₂C bus.
+- Level shifters: When adding another sensors operating on different voltage levels, a [level shifter](https://cdn-shop.adafruit.com/datasheets/an97055.pdf) may be needed for 3.3V and 5V sensors to operate on the same I²C bus.
 
 ## UdpLogger
 
