@@ -5,6 +5,10 @@ Sensei Smart Home monitoring tools. Currently aimed at air quality monitoring.
 Sensei samples connected sensors, sending readings over MQTT to a connector place (MQTT server part not included).
 [Home Assistant](https://www.home-assistant.io/) and Grafana can be setup to collect sensor readings.
 
+[<img src="docs/img/sensor-board-fixed.jpg" width="250" />](docs/img/sensor-board-fixed.jpg)
+[<img src="docs/img/grafana-liv.png" width="250" />](docs/img/grafana-liv.png)
+[<img src="docs/img/grafana-pm.png" width="250" />](docs/img/grafana-pm.png)
+
 Supports:
 - Python (RPi / busio)
 - [Micropython] (ESP32)
@@ -57,6 +61,12 @@ To support more sensors, it is needed to remove external pull-ups from the senso
 
 In case of SCD41 it is easy as pull-up is a single resistor. In others, disconnecting pull-ups is more tricky
 as pull-up is part of a single SMD component containing 4 independent resistors.
+
+Gently reminder on a formula for parallel resistors:
+
+$$
+\frac{1}{R_{\text{total}}} = \frac{1}{R_1} + \frac{1}{R_2} + \frac{1}{R_3} + \ldots + \frac{1}{R_n}
+$$
 
 ### Capacitance
 I₂C has capacitance limit 400 pF. With higher values, speed of voltage transition degrades, causing bus to be unreliable.
