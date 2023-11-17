@@ -72,7 +72,7 @@ $$
 ### Capacitance
 I²C has capacitance limit 400 pF. With higher values, speed of voltage transition degrades, causing bus to be unreliable.
 
-For sensing purpose it is recommended to use lower bus speeds, e.g., 100k HZ. Lower the frequency, higher the tolerance
+For sensing purpose it is recommended to use lower bus speeds, e.g., 100 kHz. Lower the frequency, higher the tolerance
 to the capacitance.
 
 Capacitance is inherent to the circuit (parasitical capacitance), each new board and sensor increases the capacitance (signal traces length, PCB material, chip capacitance).
