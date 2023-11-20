@@ -42,6 +42,13 @@ to the root, i.e., `./main.py` is present on ESP32.
 
 ESP32 config is json (yaml not supported). ESP32 supports connecting to the WiFi, you have to thus specify SSID and Passphrase to connect to.
 
+## Project structure
+
+- [ph4_sense](ph4_sense) base library package, compatible with both Micropython and Python 3.10+.
+  - [ph4_sense/sensors](ph4_sense/sensors) various sensors basic controllers.
+  - [ph4_sense/support](ph4_sense/support) support classes used in sensor controllers and other parts of the project (e.g, i2c helpers)
+- [ph4_sense_py](ph4_sense_py) Python 3.10 only compatible code. Some parts uses Adafruit code (wrappers around the Adafruit sensor controllers).
+
 ## Circuitry
 
 ### Pull-up resistors
