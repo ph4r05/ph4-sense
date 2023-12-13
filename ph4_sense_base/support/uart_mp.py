@@ -1,6 +1,6 @@
 import machine
 
-from ph4_sense.support.uart import Uart
+from ph4_sense_base.support.uart import Uart
 
 try:
     from typing import Optional

@@ -2,11 +2,11 @@ import machine
 import network
 from umqtt.robust import MQTTClient
 
-from ph4_sense.adapters import sleep_ms, time, updateLogger
-from ph4_sense.logger_mp import MpLogger
-from ph4_sense.sense import Sensei
-from ph4_sense.support.uart_mp import UartMp
-from ph4_sense.utils import try_fnc
+from ph4_sense_base.adapters import sleep_ms, time, updateLogger
+from ph4_sense_base.logger_mp import MpLogger
+from ph4_sense_base.sensei_base import SenseiBase
+from ph4_sense_base.support.uart_mp import UartMp
+from ph4_sense_base.utils import try_fnc
 
 # Set up your SPG30 sensor pin connections
 # https://randomnerdtutorials.com/esp32-i2c-communication-arduino-ide/
@@ -14,34 +14,18 @@ from ph4_sense.utils import try_fnc
 # SPG30_SDA_PIN = 21
 
 
-# TODO: which class inherit from?
-class SenseiMp(Sensei):
+# TODO: maybe define with modules. e.g., BusModule, WifiModule, MqttModule. Encapsulate also state inside.
+class SenseiBaseMp(SenseiBase):
     def __init__(
         self,
         is_esp32=True,
         has_wifi=True,
-        has_aht=True,
-        has_sgp30=True,
-        has_ccs811=True,
-        has_scd4x=True,
-        has_sps30=False,
-        has_hdc1080=False,
-        has_zh03b=False,
-        has_sgp41=False,
         scl_pin=22,
         sda_pin=21,
     ):
         super().__init__(
             is_esp32=is_esp32,
             has_wifi=has_wifi,
-            has_aht=has_aht,
-            has_sgp30=has_sgp30,
-            has_ccs811=has_ccs811,
-            has_scd4x=has_scd4x,
-            has_sps30=has_sps30,
-            has_hdc1080=has_hdc1080,
-            has_zh03b=has_zh03b,
-            has_sgp41=has_sgp41,
             scl_pin=scl_pin,
             sda_pin=sda_pin,
         )
@@ -156,13 +140,3 @@ class SenseiMp(Sensei):
     def publish_msg(self, topic: str, message: str):
         self.mqtt_client.publish(topic, message)
         self.print(f"Published {topic}:", message)
-
-
-def main(**kwargs):
-    sensei = SenseiMp(**kwargs)
-    sensei.main()
-
-
-# Run the main program
-if __name__ == "__main__":
-    main()
