@@ -1,4 +1,4 @@
-from ph4_sense.adapters import const, sleep_ms
+from ph4_sense_base.adapters import const, sleep_ms
 
 try:
     from machine import I2C
