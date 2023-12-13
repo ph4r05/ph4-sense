@@ -1,4 +1,4 @@
-from ph4_sense.support.allocator import PreallocatedBuffer
+from ph4_sense_base.support.allocator import PreallocatedBuffer
 
 
 class SensorHelper:
