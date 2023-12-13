@@ -76,6 +76,8 @@ setup(
     ],
     packages=find_packages(
         include=[
+            "ph4_sense_base",
+            "ph4_sense_base.*",
             "ph4_sense",
             "ph4_sense.*",
             "ph4_sense_py",
