@@ -1,3 +1,7 @@
+def def_val(cfg, key, default=None):
+    return cfg.get(key, default) if cfg else default
+
+
 def try_fnc(x, msg=None):
     try:
         return x()

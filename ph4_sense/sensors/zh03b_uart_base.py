@@ -1,6 +1,6 @@
-from ph4_sense.adapters import const, sleep_ms
-from ph4_sense.support.buffers import buf2int
-from ph4_sense.support.uart import Uart
+from ph4_sense_base.adapters import const, sleep_ms
+from ph4_sense_base.support.buffers import buf2int
+from ph4_sense_base.support.uart import Uart
 
 try:
     from typing import Optional
