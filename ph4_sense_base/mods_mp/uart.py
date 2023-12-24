@@ -1,10 +1,10 @@
 import machine
 
-from ph4_sense_base.mods.uart import ModUart
+from ph4_sense_base.mods.uart import UartMod
 from ph4_sense_base.support.uart_mp import UartMp
 
 
-class ModUartMp(ModUart):
+class UartModMp(UartMod):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
