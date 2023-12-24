@@ -37,6 +37,15 @@ class WifiModMp(WifiMod):
         self.wifi_reconnect_timeout = 60 * 3
         self.last_wifi_reconnect = 0
 
+    def load_config(self, js):
+        super().load_config(js)
+        if "wifi" not in js:
+            return
+
+        self.wifi_ssid = js["wifi"]["ssid"]
+        self.wifi_passphrase = js["wifi"]["passphrase"]
+        self.has_wifi = True
+
     def connect_wifi(self, force=False):
         if not self.has_wifi:
             return
