@@ -1,5 +1,5 @@
 from ph4_sense.sensors.common import ccs811_err_to_str
-from ph4_sense_base.adapters import getLogger, json, mem_stats, sleep_ms, time
+from ph4_sense_base.adapters import sleep_ms, time
 from ph4_sense_base.filters import ExpAverage, SensorFilter
 from ph4_sense_base.sensei_base import SenseiBase
 from ph4_sense_base.support.sensor_helper import SensorHelper

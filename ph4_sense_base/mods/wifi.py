@@ -1,6 +1,9 @@
-class WifiMod:
+from ph4_sense_base.mods import BaseMod
+
+
+class WifiMod(BaseMod):
     def __init__(self, *args, **kwargs):
-        pass
+        super().__init__()
 
     def connect_wifi(self, force=False):
         pass

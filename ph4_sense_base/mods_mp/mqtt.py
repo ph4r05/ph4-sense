@@ -10,8 +10,8 @@ from ph4_sense_base.utils import try_exec_method_cb
 class MqttModMp(MqttMod):
     def __init__(
         self,
-        client_id: str,
-        broker_host: str,
+        client_id: Optional[str] = None,
+        broker_host: Optional[str] = None,
         broker_port: int = 1883,
         topic_sub: Optional[str] = None,
         callback: Optional[Callable] = None,
@@ -26,6 +26,14 @@ class MqttModMp(MqttMod):
         self.broker_port = broker_port
         self.topic_sub = topic_sub
         self.callback = callback
+
+    def load_config(self, js):
+        super().load_config(js)
+        if "mqtt" not in js:
+            return
+
+        self.broker_host = js["mqtt"]["host"]
+        self.has_mqtt = True
 
     def create_mqtt_client(self):
         # https://notebook.community/Wei1234c/Elastic_Network_of_Things_with_MQTT_and_MicroPython/notebooks/test/MQTT%20client%20test%20-%20MicroPython
