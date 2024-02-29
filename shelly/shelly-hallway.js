@@ -44,7 +44,7 @@ let onBootCheck = function (r, error_code, error_message, userdata1) {
     return r;
 }
 
-let powerReader =  function (r, error_code, error_message, userdata1) {
+let powerReader = function (r, error_code, error_message, userdata1) {
     print("r:", JSON.stringify(r));
     swPower[r["id"]] = r["apower"];
 
