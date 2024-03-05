@@ -79,14 +79,14 @@ class Sensei(SenseiBase):
         self.last_pub = time.time() + 30
         self.last_pub_sgp = time.time() + 30
 
-        self.sgp30 = None
-        self.sgp41 = None
-        self.aht21 = None
-        self.ccs811 = None
-        self.scd4x = None
-        self.sps30 = None
-        self.hdc1080 = None
-        self.zh03b = None
+        self.sgp30 = None  # OK
+        self.sgp41 = None  # OK
+        self.aht21 = None  # OK
+        self.ccs811 = None  # OK
+        self.scd4x = None  # OK
+        self.sps30 = None  # OK
+        self.hdc1080 = None  # OK
+        self.zh03b = None  # OK
         self.sensor_helper = None
 
     def get_sensor_helper(self) -> SensorHelper:
