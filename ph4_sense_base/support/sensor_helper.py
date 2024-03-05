@@ -17,15 +17,15 @@ class SensorHelper:
         else:
             print(msg, *args)
 
-    def log_info(self, msg, *args):
+    def log_info(self, msg, *args, **kwargs):
         if self.logger:
-            self.logger.info(msg, *args)
+            self.logger.info(msg, *args, **kwargs)
         else:
             print("Info:", msg, *args)
 
-    def log_error(self, msg, *args, exc_info=None):
+    def log_error(self, msg, *args, exc_info=None, **kwargs):
         if self.logger:
-            self.logger.error(msg, *args, exc_info=exc_info)
+            self.logger.error(msg, *args, exc_info=exc_info, **kwargs)
         else:
             print("Error:", msg, *args, exc_info)
 
