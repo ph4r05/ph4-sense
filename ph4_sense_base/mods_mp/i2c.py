@@ -18,3 +18,12 @@ class I2CModMp(I2CMod):
     def start_bus(self):
         self.i2c = machine.SoftI2C(scl=machine.Pin(self.scl_pin), sda=machine.Pin(self.sda_pin))
         self.i2c.start()
+
+    def load_config(self, js):
+        super().load_config(js)
+        if "i2c" not in js:
+            return
+
+        self.scl_pin = js["ice"]["scl"]
+        self.sda_pin = js["ice"]["sda"]
+        self.has_i2c = True
