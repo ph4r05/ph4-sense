@@ -94,6 +94,13 @@ class SenseiBase(SenseiIface):
         if self.udp_logger:
             self.udp_logger.log_msg(msg, *args)
 
+    def log_fnc(self, level, msg, *args, **kwargs):
+        if level < 20:  # do not log debug events
+            return
+
+        msg_use = msg if not args else msg % args
+        self.print("log[{}]: {}".format(level, msg_use))
+
     def mqtt_callback(self, topic=None, msg=None):
         self.print("Received MQTT message:", topic, msg)
 
@@ -110,7 +117,8 @@ class SenseiBase(SenseiIface):
             return self.mod_wifi.check_wifi_ok()
 
     def create_mqtt_client(self):
-        raise NotImplementedError
+        if self.mod_mqtt is not None:
+            self.mod_mqtt.create_mqtt_client()
 
     def connect_mqtt(self):
         if self.mod_mqtt is not None:
