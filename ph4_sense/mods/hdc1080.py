@@ -16,7 +16,6 @@ class Hdc1080Mod(SensorMod):
         super().__init__(base, sensor_helper, *args, **kwargs)
         self.i2c = i2c
 
-        self.has_hdc1080 = True
         self.temp = 0
         self.humd = 0
         self.hdc1080 = None
@@ -25,8 +24,6 @@ class Hdc1080Mod(SensorMod):
         pass
 
     def connect(self):
-        if not self.has_hdc1080:
-            return
         self.print("\n - Connecting HDC1080")
         from ph4_sense.sensors.hdc1080 import hdc1080_factory
 

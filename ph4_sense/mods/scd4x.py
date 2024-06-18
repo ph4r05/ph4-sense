@@ -20,7 +20,6 @@ class Scd4xMod(SensorMod):
         super().__init__(base, sensor_helper, *args, **kwargs)
         self.i2c = i2c
 
-        self.has_scd4x = True
         self.scd40_co2 = None
         self.scd40_temp = None
         self.scd40_hum = None
@@ -30,9 +29,6 @@ class Scd4xMod(SensorMod):
         pass
 
     def connect(self):
-        if not self.has_scd4x:
-            return
-
         self.print("\n - Connecting SCD40")
         from ph4_sense.sensors.scd4x import scd4x_factory
 

@@ -17,7 +17,6 @@ class Sgp30Mod(SensorMod):
         super().__init__(base, sensor_helper, *args, **kwargs)
         self.i2c = i2c
 
-        self.has_sgp30 = True
         self.sgp30_co2eq = 0
         self.sgp30_tvoc = 0
         self.eth = 0
@@ -32,9 +31,6 @@ class Sgp30Mod(SensorMod):
         pass
 
     def connect(self):
-        if not self.has_sgp30:
-            return
-
         self.print(" - Connecting SGP30")
         from ph4_sense.sensors.sgp30 import sgp30_factory
 

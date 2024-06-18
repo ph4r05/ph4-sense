@@ -20,7 +20,6 @@ class Aht21Mod(SensorMod):
     ):
         super().__init__(base, sensor_helper, *args, **kwargs)
         self.i2c = i2c
-        self.has_aht21 = True
         self.temp = 0
         self.humd = 0
         self.aht21 = None
@@ -29,9 +28,6 @@ class Aht21Mod(SensorMod):
         pass
 
     def connect(self):
-        if not self.has_aht21:
-            return
-
         self.print("\n - Connecting AHT21")
         from ph4_sense.sensors.athx0 import ahtx0_factory
 

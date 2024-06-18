@@ -53,24 +53,31 @@ class Zh03bMod(SensorMod):
         pass
 
     def measure(self):
-        if not self.has_sps30 or not self.sps30:
+        if not self.has_zh03b or not self.zh03b:
             return
 
-        def sps30_measure_body():
-            if self.sps30.data_available:
-                self.sps30_data = self.sps30.read()
-
         try:
-            self.try_measure(sps30_measure_body)
+            reading = self.zh03b.qa_read_sample()
+            if reading is None:
+                return
+
+            self.zh03b_data = reading
+            self.print("ZH03b data {}".format(self.zh03b_data))
 
         except Exception as e:
-            self.print("Err SPS30: ", e)
-            self.log_error("SPS30 err: {}".format(e))
-            self.log_info("SPS30 err: {}".format(e), exc_info=e)
+            self.print("Err ZH03b: ", e)
+            self.log_error("ZH03b err: {}".format(e))
+            self.log_info("ZH03b err: {}".format(e), exc_info=e)
             return
 
     def get_publish_data(self):
-        if not self.sps30:
+        if not self.zh03b or not self.zh03b_data or len(self.zh03b_data) < 3:
             return
 
-        return {"sensors/sps30": self.sps30_data}
+        return {
+            "sensors/zh03b": {
+                "pm10": self.zh03b_data[0],
+                "pm25": self.zh03b_data[1],
+                "pm100": self.zh03b_data[2],
+            }
+        }
