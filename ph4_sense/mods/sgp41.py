@@ -22,7 +22,6 @@ class Sgp41Mod(SensorMod):
         self.i2c = i2c
         self.measure_loop_ms = measure_loop_ms
 
-        self.has_sgp41 = True
         self.sgp41_filter_voc = None
         self.sgp41_filter_nox = None
         self.sgp41_sraw_voc = None
@@ -33,9 +32,6 @@ class Sgp41Mod(SensorMod):
         pass
 
     def connect(self):
-        if not self.has_sgp41:
-            return
-
         self.print(" - Connecting SGP41")
         from ph4_sense.sensirion import NoxGasIndexAlgorithm, VocGasIndexAlgorithm
         from ph4_sense.sensors.sgp41 import sgp41_factory
