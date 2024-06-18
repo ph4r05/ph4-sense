@@ -17,7 +17,6 @@ class CCS811Mod(SensorMod):
     ):
         super().__init__(base, sensor_helper, *args, **kwargs)
         self.i2c = i2c
-        self.has_ccs811 = True
         self.ccs_co2 = 0
         self.ccs_tvoc = 0
         self.eavg_css811_co2 = SensorFilter(median_window=9, alpha=0.2)
@@ -30,9 +29,6 @@ class CCS811Mod(SensorMod):
         pass
 
     def connect(self):
-        if not self.has_ccs811:
-            return
-
         self.print("\n - Connecting CCS811")
         from ph4_sense.sensors.ccs811 import css811_factory
 
