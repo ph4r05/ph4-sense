@@ -1,10 +1,12 @@
+from ph4_sense_base.adapters import sleep_ms, time
 from ph4_sense_base.mods.sensors import SensorsMod
 from ph4_sense_base.sensei_iface import SenseiIface
 from ph4_sense_base.support.sensor_helper import SensorHelper
 from ph4_sense_base.support.typing import Optional
+from ph4_sense_base.utils import try_fnc
 
 
-class SensorsModMp(SensorsMod):
+class SensorsModMp(SensorsMod, SenseiIface):
     def __init__(
         self, i2c, base: Optional[SenseiIface] = None, sensor_helper: Optional[SensorHelper] = None, *args, **kwargs
     ):
@@ -12,15 +14,8 @@ class SensorsModMp(SensorsMod):
         self.i2c = i2c
         self.base = base
         self.sensor_helper = sensor_helper
-
-        # self.has_aht = has_aht
-        # self.has_hdc1080 = has_hdc1080
-        # self.has_sgp30 = has_sgp30
-        # self.has_sgp41 = has_sgp41
-        # self.has_ccs811 = has_ccs811
-        # self.has_scd4x = has_scd4x
-        # self.has_sps30 = has_sps30
-        # self.has_zh03b = has_zh03b
+        self.last_tsync = 0
+        self.temp_sync_timeout = 180
 
         self.aht21 = None
         self.hdc1080 = None
@@ -31,21 +26,27 @@ class SensorsModMp(SensorsMod):
         self.sps30 = None
         self.zh03b = None
 
+    def log_fnc(self, level, msg, *args, **kwargs):
+        return self.base.log_fnc(level, msg, *args, **kwargs)
+
+    def print(self, msg, *args):
+        return self.base.log_fnc(msg, *args)
+
+    def print_cli(self, msg, *args):
+        return self.base.print_cli(msg, *args)
+
+    def get_uart_builder(self, desc):
+        return self.base.get_uart_builder(desc)
+
+    def get_temp_humd(self):
+        return None
+
     def load_config(self, js):
         super().load_config(js)
         if "sensors" not in js:
             return
 
-        kwargs = {"base": self.base, "sensor_helper": self.sensor_helper}
-
-        # self.has_aht = False
-        # self.has_hdc1080 = False
-        # self.has_sgp30 = False
-        # self.has_sgp41 = False
-        # self.has_ccs811 = False
-        # self.has_scd4x = False
-        # self.has_sps30 = False
-        # self.has_zh03b = False
+        kwargs = {"base": self, "sensor_helper": self.sensor_helper}
 
         for sensor in js["sensors"]:
             sensor = sensor.lower()
@@ -103,9 +104,60 @@ class SensorsModMp(SensorsMod):
             self.zh03b,
         ]
 
-    def get_sensors(self):
-        return [x for x in self.get_all_sensors() if x is not None]
+    def get_sensors(self, include_temp=True):
+        excl_list = [self.aht21, self.hdc1080] if include_temp else []
+        return [x for x in self.get_all_sensors() if x is not None and x not in excl_list]
+
+    def try_measure(self, fnc):
+        for attempt in range(self.measure_attempts):
+            try:
+                return fnc()
+            except Exception as e:
+                if attempt + 1 >= self.measure_attempts:
+                    self.logger.error(f"Could not measure sensor {fnc}, attempt {attempt}: {e}")
+                    raise
+                else:
+                    self.logger.warn(f"Could not measure sensor {fnc}, attempt {attempt}: {e}")
+                    sleep_ms(self.measure_timeout)
+
+    def try_connect_sensor(self, fnc):
+        for attempt in range(self.reconnect_attempts):
+            try:
+                return fnc()
+            except Exception as e:
+                if attempt + 1 >= self.reconnect_attempts:
+                    self.logger.error(f"Could not connect sensor {fnc}, attempt {attempt}: {e}")
+                    raise
+                else:
+                    self.logger.warn(f"Could not connect sensor {fnc}, attempt {attempt}: {e}")
+                    sleep_ms(self.reconnect_timeout)
 
     def connect(self):
+        self.base.print("\nConnecting sensors")
         for s in self.get_sensors():
-            s.connect()
+            self.try_connect_sensor(s.connect)
+
+    def measure_temperature(self):
+        if self.aht21:
+            return self.aht21.measure()
+        if self.hdc1080:
+            return self.hdc1080.measure()
+        return None, None
+
+    def calibrate_temps(self, cal_temp, cal_hum):
+        if cal_temp and cal_hum and time.time() - self.last_tsync > self.temp_sync_timeout:
+            for sensor in self.get_sensors():
+                try_fnc(lambda s=sensor: s.calibrate_temps(cal_temp, cal_hum))
+
+            self.last_tsync = time.time()
+            self.base.print("Temp sync", cal_temp, cal_hum)
+
+    def measure(self):
+        t, h = self.measure_temperature()
+        self.calibrate_temps(t, h)
+
+        for sensor in self.get_sensors(include_temp=False):
+            sensor.measure()
+
+    def publish(self):
+        pass
