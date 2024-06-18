@@ -21,7 +21,6 @@ class Sps30Mod(SensorMod):
         self.i2c = i2c
         self.uart = None
 
-        self.has_sps30 = True
         self.sps30_data = None
         self.sps30 = None
 
@@ -32,9 +31,6 @@ class Sps30Mod(SensorMod):
         self.uart = cfg.get("uart", None)
 
     def connect(self):
-        if not self.has_sps30:
-            return
-
         self.print("\n - Connecting SPS30")
         if self.uart:
             from ph4_sense_py.sensors.sps30_uart_ada import SPS30AdaUart
@@ -55,7 +51,7 @@ class Sps30Mod(SensorMod):
         pass
 
     def measure(self):
-        if not self.has_sps30 or not self.sps30:
+        if not self.sps30:
             return
 
         def sps30_measure_body():
