@@ -66,10 +66,6 @@ function processEvent() {
         break;
 
       case State.MOVING_TO_POSITION:
-        if (currentOperation.tilt_duration < 0.05) {
-          transitionState(State.TILTING2, currentOperation);
-          return processEvent();
-        }
         if (currentCoverStatus && currentCoverStatus.current_pos - currentOperation.pos >= 2) {
           transitionState(State.TILTING, currentOperation);
           return processEvent();
