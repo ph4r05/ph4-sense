@@ -1,0 +1,34 @@
+input_text:
+  hallway_switch_state:
+    name: "Hallway switch state"
+    initial: "off"
+
+input_boolean:
+  hallway_switch_updated_by_webhook:
+    name: "Updated by Webhook"
+    initial: off
+
+switch:
+  - platform: template
+    switches:
+      hallway_switch:
+        friendly_name: "Hallway Switch"
+        value_template: "{{ states('input_text.hallway_switch_state') == 'on' }}"
+        turn_on:
+            - service: input_boolean.turn_off
+              target:
+                entity_id: input_boolean.hallway_switch_updated_by_webhook
+            - service: input_text.set_value
+              target:
+                entity_id: input_text.hallway_switch_state
+              data:
+                value: "on"
+        turn_off:
+            - service: input_boolean.turn_off
+              target:
+                entity_id: input_boolean.hallway_switch_updated_by_webhook
+            - service: input_text.set_value
+              target:
+                entity_id: input_text.hallway_switch_state
+              data:
+                value: "off"

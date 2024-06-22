@@ -1,0 +1,6 @@
+shelly:
+  module: shelly_app
+  class: ShellyHallway
+  shelly_cor_host: 127.0.0.1
+  shelly_cor_token: !secret shelly_cor_token
+  shelly_cor_pass: !secret shelly_cor_pass
