@@ -60,8 +60,7 @@ class ShellyAuthClient:
             response = requests.post(rpc_url, json=params)
 
         js = response.json()
-        print(js)
-        return response.json()
+        return js
 
 
 if __name__ == "__main__":

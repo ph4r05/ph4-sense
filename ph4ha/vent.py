@@ -45,6 +45,11 @@ class Venting(hass.Hass):
                 self.turn_on(self.vent_switch)
                 self.flip_history.append(current_time)
                 self.daily_flip_count += 1
+
+                if len(self.flip_history) >= 3:
+                    self.next_possible_flip_time = current_time + timedelta(minutes=20)
+                    self.log("Flip limit reached. Next possible flip time set.")
+
             elif current_time < self.next_possible_flip_time:
                 self.log("Flip delayed: Cooling off period active.")
             elif self.daily_flip_count >= 15:
