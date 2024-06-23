@@ -35,7 +35,9 @@ class Venting(hass.Hass):
         # Manage flip history for 10-minute window
         self.flip_history = [t for t in self.flip_history if current_time - t < timedelta(minutes=10)]
 
-        if float(new) > 70:
+        if float(new) > 65:
+            if self.flip_history and current_time - self.flip_history[-1] < timedelta(minutes=3):
+                self.log(f"Not venting, previous is still in progress {current_time - self.flip_history[-1]}")
             if (
                 len(self.flip_history) < 3
                 and current_time >= self.next_possible_flip_time
