@@ -1,0 +1,30 @@
+shelly:
+  module: shelly_app
+  class: ShellyHallway
+  shelly_cor_host: 127.0.0.1
+  shelly_cor_token: !secret shelly_cor_token
+  shelly_cor_pass: !secret shelly_cor_pass
+
+venting:
+  module: vent
+  class: Venting
+  hum_sensor: sensor.aqarabathroom_humidity
+  vent_switch: switch.shellyplus1_083af202ae44_switch_0
+
+blinds:
+  module: blinds
+  class: Blinds
+  blinds:
+    - name: "LivBig"
+      ip_address: "192.168.0.10"
+      ha_name: "shellyplus2pm-xxx"
+      password: !secret shelly_blinds_liv_big
+    - name: "Bedroom"
+      ip_address: "192.168.0.11"
+      ha_name: "shellyplus2pm-yyy"
+      password: !secret shelly_blinds_bedroom
+    - name: "Study"
+      ip_address: "192.168.0.12"
+      ha_name: "shellyplus2pm-zzz"
+      password: !secret shelly_blinds_study
+  weekdays_open_time: "input_text.weekday_blind_open_time"
