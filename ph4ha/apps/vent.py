@@ -60,21 +60,20 @@ class Venting(hass.Hass):
         if float(humidity) > self.humidity_threshold_value:
             if self.flip_history and current_time - self.flip_history[-1] < timedelta(seconds=3 * 60 + 15):
                 self.log(f"Not venting, previous is still in progress {current_time - self.flip_history[-1]}")
-            if (
-                len(self.flip_history) < 3
-                and current_time >= self.next_possible_flip_time
-                and self.segment_flip_count < self.segment_max_flips
-            ):
+
+            elif len(self.flip_history) >= 10:
+                self.next_possible_flip_time = current_time + timedelta(minutes=10)
+                self.log("Flip limit reached. Next possible flip time set.")
+
+            elif current_time >= self.next_possible_flip_time and self.segment_flip_count < self.segment_max_flips:
                 self.log(f"High humidity detected at {humidity}%! Venting.")
                 self.turn_on(self.vent_switch)
                 self.flip_history.append(current_time)
                 self.segment_flip_count += 1
 
-                if len(self.flip_history) >= 10:
-                    self.next_possible_flip_time = current_time + timedelta(minutes=10)
-                    self.log("Flip limit reached. Next possible flip time set.")
-
             elif current_time < self.next_possible_flip_time:
                 self.log("Flip delayed: Cooling off period active.")
             elif self.segment_flip_count >= self.segment_max_flips:
                 self.log("Maximum segment flips reached, no more flipping allowed.")
+            else:
+                self.log("Flip limit reached. No more flipping allowed.")
