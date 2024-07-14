@@ -1,0 +1,129 @@
+    - name: "Bark RMS"
+      state_topic: "bark/liv"
+      value_template: "{{ value_json.rms }}"
+      unit_of_measurement: "db"
+
+    - name: "Bark ZC"
+      state_topic: "bark/liv"
+      value_template: "{{ value_json.zero_crossings }}"
+      unit_of_measurement: "db"
+
+    - name: "Bark MFCCS 0"
+      state_topic: "bark/liv"
+      value_template: "{{ value_json.mfccs[0] }}"
+      unit_of_measurement: "db"
+
+    - name: "Bark MFCCS 1"
+      state_topic: "bark/liv"
+      value_template: "{{ value_json.mfccs[1] }}"
+      unit_of_measurement: "db"
+
+    - name: "Bark MFCCS 2"
+      state_topic: "bark/liv"
+      value_template: "{{ value_json.mfccs[2] }}"
+      unit_of_measurement: "db"
+
+    - name: "Bark MFCCS 3"
+      state_topic: "bark/liv"
+      value_template: "{{ value_json.mfccs[3] }}"
+      unit_of_measurement: "db"
+
+    - name: "Bark MFCCS 4"
+      state_topic: "bark/liv"
+      value_template: "{{ value_json.mfccs[4] }}"
+      unit_of_measurement: "db"
+
+    - name: "Bark MFCCS 5"
+      state_topic: "bark/liv"
+      value_template: "{{ value_json.mfccs[5] }}"
+      unit_of_measurement: "db"
+
+    - name: "Bark MFCCS 6"
+      state_topic: "bark/liv"
+      value_template: "{{ value_json.mfccs[6] }}"
+      unit_of_measurement: "db"
+
+    - name: "Bark MFCCS 7"
+      state_topic: "bark/liv"
+      value_template: "{{ value_json.mfccs[7] }}"
+      unit_of_measurement: "db"
+
+    - name: "Bark MFCCS 8"
+      state_topic: "bark/liv"
+      value_template: "{{ value_json.mfccs[8] }}"
+      unit_of_measurement: "db"
+
+    - name: "Bark MFCCS 9"
+      state_topic: "bark/liv"
+      value_template: "{{ value_json.mfccs[9] }}"
+      unit_of_measurement: "db"
+
+    - name: "Bark MFCCS 10"
+      state_topic: "bark/liv"
+      value_template: "{{ value_json.mfccs[10] }}"
+      unit_of_measurement: "db"
+
+    - name: "Bark MFCCS 11"
+      state_topic: "bark/liv"
+      value_template: "{{ value_json.mfccs[11] }}"
+      unit_of_measurement: "db"
+
+    - name: "Bark MFCCS 12"
+      state_topic: "bark/liv"
+      value_template: "{{ value_json.mfccs[12] }}"
+      unit_of_measurement: "db"
+
+    - name: "Bark MelB 0"
+      state_topic: "bark/liv"
+      value_template: "{{ value_json.mel_band_energies[0] }}"
+      unit_of_measurement: "db"
+
+    - name: "Bark MelB 1"
+      state_topic: "bark/liv"
+      value_template: "{{ value_json.mel_band_energies[1] }}"
+      unit_of_measurement: "db"
+
+    - name: "Bark MelB 2"
+      state_topic: "bark/liv"
+      value_template: "{{ value_json.mel_band_energies[2] }}"
+      unit_of_measurement: "db"
+
+    - name: "Bark MelB 3"
+      state_topic: "bark/liv"
+      value_template: "{{ value_json.mel_band_energies[3] }}"
+      unit_of_measurement: "db"
+
+    - name: "Bark MelB 4"
+      state_topic: "bark/liv"
+      value_template: "{{ value_json.mel_band_energies[4] }}"
+      unit_of_measurement: "db"
+
+    - name: "Bark MelB 5"
+      state_topic: "bark/liv"
+      value_template: "{{ value_json.mel_band_energies[5] }}"
+      unit_of_measurement: "db"
+
+    - name: "Bark Fband 1"
+      state_topic: "bark/liv"
+      value_template: "{{ value_json.band_energies_timed[0] }}"
+      unit_of_measurement: "db"
+
+    - name: "Bark Fband 2"
+      state_topic: "bark/liv"
+      value_template: "{{ value_json.band_energies_timed[1] }}"
+      unit_of_measurement: "db"
+
+    - name: "Bark Fband 3"
+      state_topic: "bark/liv"
+      value_template: "{{ value_json.band_energies_timed[2] }}"
+      unit_of_measurement: "db"
+
+    - name: "Bark Fband 4"
+      state_topic: "bark/liv"
+      value_template: "{{ value_json.band_energies_timed[3] }}"
+      unit_of_measurement: "db"
+
+    - name: "Bark Fband 5"
+      state_topic: "bark/liv"
+      value_template: "{{ value_json.band_energies_timed[4] }}"
+      unit_of_measurement: "db"
