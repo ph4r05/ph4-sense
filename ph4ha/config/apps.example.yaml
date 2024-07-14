@@ -28,3 +28,9 @@ blinds:
       ha_name: "shellyplus2pm-zzz"
       password: !secret shelly_blinds_study
   weekdays_open_time: "input_text.weekday_blind_open_time"
+  guest_mode_input: "input_text.weekday_blind_open_time"
+  stop_automation_input: "input_text.weekday_blind_open_time"
+  morning_routine_time_input: "input_text.weekday_blind_open_time"
+  full_open_time_input: "input_text.weekday_blind_open_time"
+  full_close_time_input: "input_text.weekday_blind_open_time"
+  privacy_time_input: "input_text.weekday_blind_open_time"

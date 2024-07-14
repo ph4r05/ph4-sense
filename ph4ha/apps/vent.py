@@ -4,6 +4,10 @@ import hassapi as hass
 
 
 class Venting(hass.Hass):
+    """
+    TODO: threshold + diff of two hum sensors.
+    """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.hum_sensor = None
@@ -11,7 +15,7 @@ class Venting(hass.Hass):
 
         # Timing control
         self.flip_history = []
-        self.humidity_threshold_value = 65
+        self.humidity_threshold_value = 68
         self.segment_max_flips = 15
         self.segment_flip_count = 0
         self.last_reset_time = datetime.now()
