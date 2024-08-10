@@ -18,7 +18,7 @@ class Bark:
         self.mqtt_topic_sub = "bark"
 
         # Parameters
-        self.sampling_rate = 22050  # Hz
+        self.sampling_rate = 44100  # 22050  # Hz
         self.strip_duration = 0.05  # Duration to strip from the beginning in seconds
         self.frame_length = 2048
         self.hop_length = 512
