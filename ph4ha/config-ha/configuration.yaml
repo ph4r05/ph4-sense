@@ -74,3 +74,18 @@ scene:
     entities: { }
     icon: mdi:blinds
     metadata: { }
+  - id: 'scene-blinds-all-down-open'
+    name: Blinds All Down Open
+    entities: { }
+    icon: mdi:blinds
+    metadata: { }
+  - id: 'scene-blinds-down-open'
+    name: Blinds Down Open
+    entities: { }
+    icon: mdi:blinds
+    metadata: { }
+  - id: 'scene-blinds-morning'
+    name: Blinds Morning
+    entities: { }
+    icon: mdi:blinds
+    metadata: { }

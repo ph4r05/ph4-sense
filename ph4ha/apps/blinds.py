@@ -75,6 +75,15 @@ class Blinds(hass.Hass):
         elif scene_id == "scene.blinds_tilt_close":
             self.log("Scene: blinds_tilt_close")
             self.blinds_tilt_close()
+        elif scene_id == "scene.blinds_down_open":
+            self.log("Scene: blinds_down_open")
+            self.blinds_down_open()
+        elif scene_id == "scene.blinds_all_down_open":
+            self.log("Scene: blinds_all_down_open")
+            self.blinds_all_down_open()
+        elif scene_id == "scene.blinds_morning":
+            self.log("Scene: blinds_morning")
+            self.blinds_morning()
 
     def handle_vent(self):
         self.log("Vent started")
@@ -118,6 +127,26 @@ class Blinds(hass.Hass):
         self.blinds_tilt(self.BLIND_BEDROOM, 0)
         self.blinds_tilt(self.BLIND_SKLAD, 0)
         self.blinds_tilt(self.BLIND_STUDY, 0)
+
+    def blinds_down_open(self):
+        self.blinds_pos_tilt(self.BLIND_LIV_BIG, 0, self.OPEN_HALF)
+        self.blinds_pos_tilt(self.BLIND_BEDROOM, 0, self.OPEN_HALF)
+        self.blinds_pos_tilt(self.BLIND_SKLAD, 0, self.OPEN_HALF)
+        self.blinds_pos_tilt(self.BLIND_STUDY, 0, self.OPEN_HALF)
+
+    def blinds_all_down_open(self):
+        self.blinds_pos_tilt(self.BLIND_LIV_BIG, 0, self.OPEN_HALF)
+        self.blinds_pos_tilt(self.BLIND_LIV_DOOR, 0, self.OPEN_HALF)
+        self.blinds_pos_tilt(self.BLIND_BEDROOM, 0, self.OPEN_HALF)
+        self.blinds_pos_tilt(self.BLIND_SKLAD, 0, self.OPEN_HALF)
+        self.blinds_pos_tilt(self.BLIND_STUDY, 0, self.OPEN_HALF)
+
+    def blinds_morning(self):
+        self.blinds_living_morning()
+        self.blinds_pos_tilt(self.BLIND_LIV_DOOR, 100, 0)
+        self.blinds_pos_tilt(self.BLIND_BEDROOM, 100, 0)
+        self.blinds_pos_tilt(self.BLIND_SKLAD, 0, self.OPEN_HALF)
+        self.blinds_pos_tilt(self.BLIND_STUDY, 0, self.OPEN_HALF)
 
     def blinds_pos_tilt(self, blind, pos, tilt):
         blind_rec = self.blinds[blind]
