@@ -89,3 +89,18 @@ scene:
     entities: { }
     icon: mdi:blinds
     metadata: { }
+  - id: 'scene-living-down-open'
+    name: Blinds Living Down Open
+    entities: { }
+    icon: mdi:blinds
+    metadata: { }
+  - id: 'scene-living-down-close'
+    name: Blinds Living Down Close
+    entities: { }
+    icon: mdi:blinds
+    metadata: { }
+  - id: 'scene-living-down-privacy'
+    name: Blinds Living Down Privacy
+    entities: { }
+    icon: mdi:blinds
+    metadata: { }

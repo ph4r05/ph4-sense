@@ -16,7 +16,7 @@ class Blinds(hass.Hass):
     BLIND_BEDROOM = "Bedroom"
     BLIND_STUDY = "Study"
     BLIND_SKLAD = "Sklad"
-    OPEN_HALF = 1
+    OPEN_HALF = 0.9
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -84,6 +84,15 @@ class Blinds(hass.Hass):
         elif scene_id == "scene.blinds_morning":
             self.log("Scene: blinds_morning")
             self.blinds_morning()
+        elif scene_id == "scene.blinds_living_down_close":
+            self.log("Scene: blinds_living_down_close")
+            self.blinds_living_down_close()
+        elif scene_id == "scene.blinds_living_down_open":
+            self.log("Scene: blinds_living_down_open")
+            self.blinds_living_down_open()
+        elif scene_id == "scene.blinds_living_down_privacy":
+            self.log("Scene: blinds_living_down_privacy")
+            self.blinds_living_down_privacy()
 
     def handle_vent(self):
         self.log("Vent started")
@@ -99,6 +108,15 @@ class Blinds(hass.Hass):
 
     def blinds_living_privacy(self):
         self.blinds_pos_tilt(self.BLIND_LIV_BIG, 30, 0.1)
+
+    def blinds_living_down_close(self):
+        self.blinds_pos_tilt(self.BLIND_LIV_BIG, 0, 0)
+
+    def blinds_living_down_open(self):
+        self.blinds_pos_tilt(self.BLIND_LIV_BIG, 0, self.OPEN_HALF)
+
+    def blinds_living_down_privacy(self):
+        self.blinds_pos_tilt(self.BLIND_LIV_BIG, 0, 0.7)
 
     def blinds_all_up(self):
         self.blinds_pos_tilt(self.BLIND_LIV_BIG, 100, 0)
