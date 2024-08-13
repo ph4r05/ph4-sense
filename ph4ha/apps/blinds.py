@@ -25,7 +25,7 @@ class Blinds(hass.Hass):
 
     def initialize(self):
         self.blinds = {x["name"]: x for x in self.args["blinds"]}
-        self.weekdays_open_time = None  # self.get_state(self.args["weekdays_open_time"])
+        self.weekdays_open_time = self.get_state(self.args["weekdays_open_time"])
 
         self.listen_event(self.scene_activated, "call_service", domain="scene", service="turn_on")
 
@@ -44,7 +44,7 @@ class Blinds(hass.Hass):
         # # Schedule to lower and tilt blinds 1 hour after sunset
         # self.run_at_sunset(self.lower_and_tilt_blinds, offset=3600)  # offset in seconds
 
-        self.log("initialized")
+        self.log(f"initialized, {self.weekdays_open_time=}")
 
     def scene_activated(self, event_name, data, kwargs):
         # Extract the scene ID or entity ID
@@ -52,53 +52,47 @@ class Blinds(hass.Hass):
         self.log(f"scene_activated: {scene_id}")
 
         if scene_id == "scene.blinds_vent":
-            self.log("Scene: blinds_vent")
             self.handle_vent()
+        elif scene_id == "scene.blinds_vent_bedroom":
+            self.blinds_vent_bedroom()
+        elif scene_id == "scene.blinds_vent_livingroom":
+            self.blinds_vent_livingroom()
         elif scene_id == "scene.blinds_living_morning":
-            self.log("Scene: blinds_living_morning")
             self.blinds_living_morning()
         elif scene_id == "scene.blinds_living_morning_hot":
-            self.log("Scene: blinds_living_morning_hot")
             self.blinds_living_morning_hot()
         elif scene_id == "scene.blinds_living_privacy":
-            self.log("Scene: blinds_living_privacy")
             self.blinds_living_privacy()
         elif scene_id == "scene.blinds_all_up":
-            self.log("Scene: blinds_all_up")
             self.blinds_all_up()
         elif scene_id == "scene.blinds_all_down":
-            self.log("Scene: blinds_all_down")
             self.blinds_all_down()
         elif scene_id == "scene.blinds_tilt_open":
-            self.log("Scene: blinds_tilt_open")
             self.blinds_tilt_open()
         elif scene_id == "scene.blinds_tilt_close":
-            self.log("Scene: blinds_tilt_close")
             self.blinds_tilt_close()
         elif scene_id == "scene.blinds_down_open":
-            self.log("Scene: blinds_down_open")
             self.blinds_down_open()
         elif scene_id == "scene.blinds_all_down_open":
-            self.log("Scene: blinds_all_down_open")
             self.blinds_all_down_open()
         elif scene_id == "scene.blinds_morning":
-            self.log("Scene: blinds_morning")
             self.blinds_morning()
         elif scene_id == "scene.blinds_living_down_close":
-            self.log("Scene: blinds_living_down_close")
             self.blinds_living_down_close()
         elif scene_id == "scene.blinds_living_down_open":
-            self.log("Scene: blinds_living_down_open")
             self.blinds_living_down_open()
         elif scene_id == "scene.blinds_living_down_privacy":
-            self.log("Scene: blinds_living_down_privacy")
             self.blinds_living_down_privacy()
 
     def handle_vent(self):
-        self.log("Vent started")
         self.blinds_pos_tilt(self.BLIND_LIV_DOOR, 0, self.OPEN_HALF)
         self.blinds_pos_tilt(self.BLIND_BEDROOM, 0, self.OPEN_HALF)
-        self.log("Vent ended")
+
+    def blinds_vent_bedroom(self):
+        self.blinds_pos_tilt(self.BLIND_BEDROOM, 0, self.OPEN_HALF)
+
+    def blinds_vent_livingroom(self):
+        self.blinds_pos_tilt(self.BLIND_LIV_DOOR, 0, self.OPEN_HALF)
 
     def blinds_living_morning(self):
         self.blinds_pos_tilt(self.BLIND_LIV_BIG, 35, self.OPEN_HALF)
@@ -167,21 +161,18 @@ class Blinds(hass.Hass):
         self.blinds_pos_tilt(self.BLIND_STUDY, 0, self.OPEN_HALF)
 
     def blinds_pos_tilt(self, blind, pos, tilt):
-        blind_rec = self.blinds[blind]
-        blind_host = blind_rec["ip_address"]
-
         data = {"id": 1, "method": "Script.Eval", "params": {"id": 1, "code": f"posAndTilt({pos}, {tilt})"}}
-        response = requests.post(
-            f"http://{blind_host}/rpc", data=json.dumps(data), headers={"Content-Type": "application/json"}
-        )
-        self.log(f"Req: {blind_host}, data: {json.dumps(data)}, response: {response}")
+        return self.blinds_req(blind, data)
 
     def blinds_tilt(self, blind, tilt):
+        data = {"id": 1, "method": "Script.Eval", "params": {"id": 1, "code": f"tilt({tilt})"}}
+        return self.blinds_req(blind, data)
+
+    def blinds_req(self, blind, data):
         blind_rec = self.blinds[blind]
         blind_host = blind_rec["ip_address"]
-
-        data = {"id": 1, "method": "Script.Eval", "params": {"id": 1, "code": f"tilt({tilt})"}}
         response = requests.post(
             f"http://{blind_host}/rpc", data=json.dumps(data), headers={"Content-Type": "application/json"}
         )
         self.log(f"Req: {blind_host}, data: {json.dumps(data)}, response: {response}")
+        return response
