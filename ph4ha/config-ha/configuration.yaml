@@ -5,8 +5,17 @@ input_text:
 
 input_boolean:
   hallway_switch_updated_by_webhook:
-    name: "Updated by Webhook"
+    name: "Hallway Updated by Webhook"
     initial: off
+  blinds_guest_mode:
+    name: "Blinds Guest Mode"
+    initial: false
+
+input_datetime:
+  blinds_weekday_open_time:
+    name: Blinds Weekday Open Time
+    has_date: false
+    has_time: true
 
 switch:
   - platform: template

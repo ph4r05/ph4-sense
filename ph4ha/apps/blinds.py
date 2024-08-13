@@ -22,11 +22,24 @@ class Blinds(hass.Hass):
         super().__init__(*args, **kwargs)
         self.blinds = None
         self.weekdays_open_time = None
+        self.guest_mode: bool = False
+        self.field_weekdays_open_time = None
+        self.field_guest_mode = None
 
     def initialize(self):
         self.blinds = {x["name"]: x for x in self.args["blinds"]}
-        self.weekdays_open_time = self.get_state(self.args["weekdays_open_time"])
+        self.field_weekdays_open_time = self.args["weekdays_open_time"]
+        self.field_guest_mode = self.args["guest_mode_input"]
 
+        # Set initial blind open time
+        self.update_blind_open_time()
+        self.update_blind_guest_mode()
+
+        # Listen for changes to the input_datetime entity
+        self.listen_state(self.update_blind_open_time, self.field_weekdays_open_time)
+        self.listen_state(self.update_blind_guest_mode, self.field_guest_mode)
+
+        # Listen to scene changes
         self.listen_event(self.scene_activated, "call_service", domain="scene", service="turn_on")
 
         # # Schedule for weekdays
@@ -44,7 +57,29 @@ class Blinds(hass.Hass):
         # # Schedule to lower and tilt blinds 1 hour after sunset
         # self.run_at_sunset(self.lower_and_tilt_blinds, offset=3600)  # offset in seconds
 
-        self.log(f"initialized, {self.weekdays_open_time=}")
+        self.log(f"initialized, {self.weekdays_open_time=}, {self.guest_mode=}")
+
+    def update_blind_open_time(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
+        weekday_blind_open_time = self.get_state(self.field_weekdays_open_time)
+
+        if weekday_blind_open_time is None:
+            self.log("Failed to retrieve weekday_blind_open_time state.")
+        else:
+            self.log(f"Weekday Blind Open Time updated: {weekday_blind_open_time}")
+
+            self.weekdays_open_time = self.parse_time(weekday_blind_open_time)
+            self.log(f"{self.weekdays_open_time=}")
+
+            # Cancel any previously scheduled runs to avoid duplication
+            # self.cancel_timers()
+
+            # Schedule the blind open event at the new time
+            # self.run_daily(self.open_blinds, self.weekdays_open_time)
+
+    def update_blind_guest_mode(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
+        guest_mode = self.get_state(self.field_guest_mode)
+        self.guest_mode = guest_mode == "on"
+        self.log(f"{self.guest_mode=}")
 
     def scene_activated(self, event_name, data, kwargs):
         # Extract the scene ID or entity ID
