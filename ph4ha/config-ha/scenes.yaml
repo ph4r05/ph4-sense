@@ -78,3 +78,18 @@
   entities: { }
   icon: mdi:blinds
   metadata: { }
+- id: 'scene-blinds-vent-livbig'
+  name: Blinds vent livbig
+  entities: { }
+  icon: mdi:blinds
+  metadata: { }
+- id: 'scene-blinds-vent-study'
+  name: Blinds vent Study
+  entities: { }
+  icon: mdi:blinds
+  metadata: { }
+- id: 'scene-blinds-vent-sklad'
+  name: Blinds vent Sklad
+  entities: { }
+  icon: mdi:blinds
+  metadata: { }

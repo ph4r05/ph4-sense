@@ -10,10 +10,17 @@ input_boolean:
   blinds_guest_mode:
     name: "Blinds Guest Mode"
     initial: false
+  blinds_automation_enabled:
+    name: "Blinds Automation enabled"
+    initial: true
 
 input_datetime:
   blinds_weekday_open_time:
     name: Blinds Weekday Open Time
+    has_date: false
+    has_time: true
+  blinds_weekday_guest_open_time:
+    name: Blinds Guest Weekday Open Time
     has_date: false
     has_time: true
 

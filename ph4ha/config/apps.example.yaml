@@ -27,9 +27,11 @@ blinds:
       ip_address: "192.168.0.12"
       ha_name: "shellyplus2pm-zzz"
       password: !secret shelly_blinds_study
-  weekdays_open_time: "input_datetime.blinds_weekday_open_time"
+  weekdays_open_time: "input_datetime.weekday_blind_open_time"
   guest_mode_input: "input_boolean.blinds_guest_mode"
-  stop_automation_input: "input_text.weekday_blind_open_time"
+  guest_weekdays_open_time_input: "input_datetime.blinds_weekday_guest_open_time"
+  automation_enabled_input: "input_boolean.blinds_automation_enabled"
+
   morning_routine_time_input: "input_text.weekday_blind_open_time"
   full_open_time_input: "input_text.weekday_blind_open_time"
   full_close_time_input: "input_text.weekday_blind_open_time"

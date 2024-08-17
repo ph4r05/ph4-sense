@@ -1,0 +1,25 @@
+- alias: "Receive Hallway Switch State Update"
+  trigger:
+    - platform: webhook
+      webhook_id: shelly_cor
+  condition:
+    - condition: template
+      value_template: "{{ trigger.json.token == 'xxxxx' }}"
+  action:
+    - service: input_boolean.turn_on
+      entity_id: input_boolean.hallway_switch_updated_by_webhook
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.hallway_switch_state
+      data:
+        value: "{{ trigger.json.state }}"
+
+- alias: Button 1 Short Click - Activate Blinds Vent Scene
+  trigger:
+    platform: state
+    entity_id: sensor.switch4bed_switch4bed_action
+    to: "1_single"
+  action:
+    service: scene.turn_on
+    target:
+      entity_id: scene.blinds_vent_bedroom
