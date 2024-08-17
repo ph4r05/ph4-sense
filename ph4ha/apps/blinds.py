@@ -242,8 +242,9 @@ class Blinds(hass.Hass):
         self.blinds_living_morning()
         self.blinds_pos_tilt(self.BLIND_LIV_DOOR, 100, 0)
         self.blinds_pos_tilt(self.BLIND_BEDROOM, 100, 0)
-        self.blinds_pos_tilt(self.BLIND_SKLAD, 0, self.OPEN_HALF)
         self.blinds_pos_tilt(self.BLIND_STUDY, 0, self.OPEN_HALF)
+        if not self.guest_mode:
+            self.blinds_pos_tilt(self.BLIND_SKLAD, 0, self.OPEN_HALF)
 
     def blind_move(self, blind, pos: Optional[float], tilt: float):
         if pos is None:
