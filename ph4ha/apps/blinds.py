@@ -12,8 +12,10 @@ class BlindsState(Enum):
     INITIAL = auto()
     MORNING_SCHEME = auto()
     AFTERNOON_UP = auto()
+    DUSK_MODE = auto()
     PRIVACY_MODE = auto()
     NIGHT_MODE = auto()
+    NIGHT_VENT = auto()
 
 
 class Blinds(hass.Hass):
@@ -41,6 +43,7 @@ class Blinds(hass.Hass):
         self.bedroom_automation_enabled: bool = True
         self.next_dusk_time = None
         self.dusk_offset = None
+        self.current_state = BlindsState.INITIAL
 
         self.field_weekdays_open_time = None
         self.field_guest_mode = None
@@ -109,6 +112,24 @@ class Blinds(hass.Hass):
 
         self.log(f"initialized, {self.weekdays_open_time=}, {self.guest_mode=}")
 
+    def transition_function(self):
+        pass
+
+    def on_change_to_dusk(self):
+        pass
+
+    def on_change_to_morning(self):
+        pass
+
+    def on_change_to_night(self):
+        pass
+
+    def on_change_from_time(self):
+        # Determine current state from the current time
+        # E.g. if automation was disabled for a while or system is reconfigured
+        # Find the next state in the timeline
+        pass
+
     def update_dusk_time(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
         self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
 
@@ -118,11 +139,10 @@ class Blinds(hass.Hass):
             return
 
         try:
-            self.log(f"{dusk_time_str=}")
             self.next_dusk_time = datetime.datetime.fromisoformat(dusk_time_str.replace("Z", "+00:00"))
             self.log(f"{self.next_dusk_time=}")
         except Exception as e:
-            self.log(f"Failed to retrieve dusk time state: {e}")
+            self.log(f"Failed to retrieve dusk time state: {e}, {dusk_time_str=}")
 
     def update_blind_open_time(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
         self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
