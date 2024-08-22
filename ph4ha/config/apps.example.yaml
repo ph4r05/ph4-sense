@@ -31,8 +31,8 @@ blinds:
   guest_mode_input: "input_boolean.blinds_guest_mode"
   guest_weekdays_open_time_input: "input_datetime.blinds_weekday_guest_open_time"
   automation_enabled_input: "input_boolean.blinds_automation_enabled"
+  bedroom_automation_enabled: "input_boolean.blinds_bedroom_automation_enabled"
 
-  morning_routine_time_input: "input_text.weekday_blind_open_time"
   full_open_time_input: "input_text.weekday_blind_open_time"
   full_close_time_input: "input_text.weekday_blind_open_time"
   privacy_time_input: "input_text.weekday_blind_open_time"

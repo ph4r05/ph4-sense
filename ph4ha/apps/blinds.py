@@ -1,8 +1,19 @@
+import datetime
 import json
+from datetime import time
+from enum import Enum, auto
 from typing import Optional
 
 import hassapi as hass
 import requests
+
+
+class BlindsState(Enum):
+    INITIAL = auto()
+    MORNING_SCHEME = auto()
+    AFTERNOON_UP = auto()
+    PRIVACY_MODE = auto()
+    NIGHT_MODE = auto()
 
 
 class Blinds(hass.Hass):
@@ -27,11 +38,18 @@ class Blinds(hass.Hass):
         self.guest_weekdays_open_time = None
         self.guest_mode: bool = False
         self.automation_enabled: bool = True
+        self.bedroom_automation_enabled: bool = True
+        self.next_dusk_time = None
 
         self.field_weekdays_open_time = None
         self.field_guest_mode = None
         self.field_automation_enabled = None
         self.field_guest_weekdays_open_time = None
+        self.field_bedroom_automation_enabled = None
+        self.field_weekend_open_time = None
+        self.field_sunset_offset_time = None
+        self.field_full_open_time = None
+        self.field_full_close_time = None
 
     def initialize(self):
         self.blinds = {x["name"]: x for x in self.args["blinds"]}
@@ -39,21 +57,35 @@ class Blinds(hass.Hass):
         self.field_guest_weekdays_open_time = self.args["guest_weekdays_open_time_input"]
         self.field_guest_mode = self.args["guest_mode_input"]
         self.field_automation_enabled = self.args["automation_enabled_input"]
+        self.field_bedroom_automation_enabled = self.args["bedroom_automation_enabled"]
+        # self.field_weekend_open_time = self.args["weekend_open_time_input"]
+        # self.field_sunset_offset_time = self.args["sunset_offset_time_input"]
+        # self.field_full_open_time = self.args["full_open_time_input"]
+        # self.field_full_close_time = self.args["full_close_time_input"]
 
         # Set initial blind open time
         self.update_blind_open_time()
         self.update_blind_open_time_guest()
         self.update_blind_guest_mode()
         self.update_blind_automation_enabled()
+        self.update_blind_bedroom_automation_enabled()
+        self.update_dusk_time()
 
         # Listen for changes to the input_datetime entity
         self.listen_state(self.update_blind_open_time, self.field_weekdays_open_time)
         self.listen_state(self.update_blind_open_time_guest, self.field_guest_weekdays_open_time)
         self.listen_state(self.update_blind_guest_mode, self.field_guest_mode)
         self.listen_state(self.update_blind_automation_enabled, self.field_automation_enabled)
+        self.listen_state(self.update_blind_bedroom_automation_enabled, self.field_bedroom_automation_enabled)
 
         # Listen to scene changes
         self.listen_event(self.scene_activated, "call_service", domain="scene", service="turn_on")
+
+        # Daily update new dusk time
+        self.run_daily(self.update_dusk_time(), time(hour=0, minute=0))
+
+        # TODO: separate bedroom - add another timer, bedroom mode.
+        # TODO: dusk timer, sensor.sun_next_dusk
 
         # # Schedule for weekdays
         # self.run_daily(self.open_blinds, time(hour=7, minute=30), weekdays="mon,tue,wed,thu,fri")
@@ -72,7 +104,23 @@ class Blinds(hass.Hass):
 
         self.log(f"initialized, {self.weekdays_open_time=}, {self.guest_mode=}")
 
+    def update_dusk_time(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
+        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+
+        dusk_time_str = self.get_state("sensor.sun_next_dusk")
+        if dusk_time_str is None:
+            self.log("Failed to retrieve dusk time state.")
+            return
+
+        try:
+            self.log(f"{dusk_time_str=}")
+            self.next_dusk_time = datetime.datetime.fromisoformat(dusk_time_str.replace("Z", "+00:00"))
+            self.log(f"{self.next_dusk_time=}")
+        except Exception as e:
+            self.log(f"Failed to retrieve dusk time state: {e}")
+
     def update_blind_open_time(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
+        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
         weekday_blind_open_time = self.get_state(self.field_weekdays_open_time)
 
         if weekday_blind_open_time is None:
@@ -90,6 +138,7 @@ class Blinds(hass.Hass):
             # self.run_daily(self.open_blinds, self.weekdays_open_time)
 
     def update_blind_open_time_guest(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
+        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
         open_time = self.get_state(self.field_guest_weekdays_open_time)
 
         if open_time is None:
@@ -99,14 +148,19 @@ class Blinds(hass.Hass):
             self.log(f"{self.guest_weekdays_open_time=}")
 
     def update_blind_guest_mode(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
-        guest_mode = self.get_state(self.field_guest_mode)
-        self.guest_mode = guest_mode == "on"
+        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        self.guest_mode = self.to_bool(self.get_state(self.field_guest_mode))
         self.log(f"{self.guest_mode=}")
 
     def update_blind_automation_enabled(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
-        automation_enabled = self.get_state(self.field_automation_enabled)
-        self.automation_enabled = automation_enabled == "on"
+        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        self.automation_enabled = self.to_bool(self.get_state(self.field_guest_mode))
         self.log(f"{self.automation_enabled=}")
+
+    def update_blind_bedroom_automation_enabled(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
+        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        self.bedroom_automation_enabled = self.to_bool(self.get_state(self.field_guest_mode))
+        self.log(f"{self.bedroom_automation_enabled=}")
 
     def scene_activated(self, event_name, data, kwargs):
         # Extract the scene ID or entity ID
@@ -144,6 +198,8 @@ class Blinds(hass.Hass):
             self.blinds_all_down_open()
         elif scene_id == "scene.blinds_morning":
             self.blinds_morning()
+        elif scene_id == "scene.blinds_morning_context":
+            self.blinds_morning_context()
         elif scene_id == "scene.blinds_living_down_close":
             self.blinds_living_down_close()
         elif scene_id == "scene.blinds_living_down_open":
@@ -246,6 +302,21 @@ class Blinds(hass.Hass):
         if not self.guest_mode:
             self.blinds_pos_tilt(self.BLIND_SKLAD, 0, self.OPEN_HALF)
 
+    def blinds_morning_context(self):
+        if not self.automation_enabled:
+            self.log("Automation disabled")
+            return
+
+        self.blinds_living_morning()
+        self.blinds_pos_tilt(self.BLIND_LIV_DOOR, 100, 0)
+        self.blinds_pos_tilt(self.BLIND_STUDY, 0, self.OPEN_HALF)
+
+        if not self.guest_mode:
+            self.blinds_pos_tilt(self.BLIND_SKLAD, 0, self.OPEN_HALF)
+
+        if self.bedroom_automation_enabled:
+            self.blinds_pos_tilt(self.BLIND_BEDROOM, 100, 0)
+
     def blind_move(self, blind, pos: Optional[float], tilt: float):
         if pos is None:
             self.blinds_tilt(blind, tilt)
@@ -268,3 +339,6 @@ class Blinds(hass.Hass):
         )
         self.log(f"Req: {blind_host}, data: {json.dumps(data)}, response: {response}")
         return response
+
+    def to_bool(self, inp):
+        return inp == "on"

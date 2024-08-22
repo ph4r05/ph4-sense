@@ -53,6 +53,11 @@
   entities: { }
   icon: mdi:blinds
   metadata: { }
+- id: 'scene-blinds-morning-context'
+  name: Blinds Morning Context
+  entities: { }
+  icon: mdi:blinds
+  metadata: { }
 - id: 'scene-living-down-open'
   name: Blinds Living Down Open
   entities: { }
