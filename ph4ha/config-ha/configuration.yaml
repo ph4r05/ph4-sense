@@ -26,6 +26,11 @@ input_datetime:
     name: Blinds Guest Weekday Open Time
     has_date: false
     has_time: true
+  blinds_dusk_offset:
+    name: Blinds Dusk offset
+    has_date: false
+    has_time: true
+    initial: "12:00"
 
 switch:
   - platform: template

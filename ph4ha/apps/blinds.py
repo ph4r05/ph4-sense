@@ -40,12 +40,14 @@ class Blinds(hass.Hass):
         self.automation_enabled: bool = True
         self.bedroom_automation_enabled: bool = True
         self.next_dusk_time = None
+        self.dusk_offset = None
 
         self.field_weekdays_open_time = None
         self.field_guest_mode = None
         self.field_automation_enabled = None
         self.field_guest_weekdays_open_time = None
         self.field_bedroom_automation_enabled = None
+        self.field_dusk_offset = None
         self.field_weekend_open_time = None
         self.field_sunset_offset_time = None
         self.field_full_open_time = None
@@ -57,7 +59,8 @@ class Blinds(hass.Hass):
         self.field_guest_weekdays_open_time = self.args["guest_weekdays_open_time_input"]
         self.field_guest_mode = self.args["guest_mode_input"]
         self.field_automation_enabled = self.args["automation_enabled_input"]
-        self.field_bedroom_automation_enabled = self.args["bedroom_automation_enabled"]
+        self.field_bedroom_automation_enabled = self.args["bedroom_automation_enabled_input"]
+        self.field_dusk_offset = self.args["dusk_offset_input"]
         # self.field_weekend_open_time = self.args["weekend_open_time_input"]
         # self.field_sunset_offset_time = self.args["sunset_offset_time_input"]
         # self.field_full_open_time = self.args["full_open_time_input"]
@@ -69,6 +72,7 @@ class Blinds(hass.Hass):
         self.update_blind_guest_mode()
         self.update_blind_automation_enabled()
         self.update_blind_bedroom_automation_enabled()
+        self.update_blind_dusk_offset()
         self.update_dusk_time()
 
         # Listen for changes to the input_datetime entity
@@ -77,6 +81,7 @@ class Blinds(hass.Hass):
         self.listen_state(self.update_blind_guest_mode, self.field_guest_mode)
         self.listen_state(self.update_blind_automation_enabled, self.field_automation_enabled)
         self.listen_state(self.update_blind_bedroom_automation_enabled, self.field_bedroom_automation_enabled)
+        self.listen_state(self.update_blind_dusk_offset, self.field_dusk_offset)
 
         # Listen to scene changes
         self.listen_event(self.scene_activated, "call_service", domain="scene", service="turn_on")
@@ -161,6 +166,17 @@ class Blinds(hass.Hass):
         self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
         self.bedroom_automation_enabled = self.to_bool(self.get_state(self.field_guest_mode))
         self.log(f"{self.bedroom_automation_enabled=}")
+
+    def update_blind_dusk_offset(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
+        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        value = self.get_state(self.field_dusk_offset)
+
+        if value is None:
+            self.log("Failed to retrieve field_dusk_offset state.")
+            return
+
+        self.dusk_offset = self.parse_time(value)
+        self.log(f"{self.dusk_offset=}")
 
     def scene_activated(self, event_name, data, kwargs):
         # Extract the scene ID or entity ID
