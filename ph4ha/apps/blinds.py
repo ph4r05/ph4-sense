@@ -90,7 +90,7 @@ class Blinds(hass.Hass):
         self.listen_event(self.scene_activated, "call_service", domain="scene", service="turn_on")
 
         # Daily update new dusk time
-        self.run_daily(self.update_dusk_time(), time(hour=0, minute=0))
+        self.run_daily(self.update_dusk_time, time(hour=0, minute=0))
 
         # TODO: separate bedroom - add another timer, bedroom mode.
         # TODO: dusk timer, sensor.sun_next_dusk
