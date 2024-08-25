@@ -19,6 +19,9 @@ input_boolean:
   blinds_dusk_automation_enabled:
     name: "Blinds Dusk Automation enabled"
     initial: true
+  blinds_full_open_automation_enabled:
+    name: "Blinds Full Open Automation enabled"
+    initial: true
 
 input_datetime:
   blinds_weekday_open_time:
@@ -31,6 +34,11 @@ input_datetime:
     has_time: true
   blinds_dusk_offset:
     name: Blinds Dusk offset
+    has_date: false
+    has_time: true
+    initial: "12:00"
+  blinds_pre_dusk_offset:
+    name: Blinds Pre Dusk offset
     has_date: false
     has_time: true
     initial: "12:00"

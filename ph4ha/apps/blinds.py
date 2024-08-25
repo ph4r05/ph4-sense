@@ -45,10 +45,14 @@ class Blinds(hass.Hass):
         self.automation_enabled: bool = True
         self.bedroom_automation_enabled: bool = True
         self.next_dusk_time: Optional[datetime.datetime] = None
+        self.next_noon_time: Optional[datetime.datetime] = None
         self.dusk_offset: Optional[datetime.time] = None
+        self.pre_dusk_offset: Optional[datetime.time] = None
         self.dusk_automation_enabled = True
         self.current_state = BlindsState.INITIAL
+        self.full_open_automation_enabled = None
         self.dusk_timer = None
+        self.pre_dusk_timer = None
 
         self.field_weekdays_open_time = None
         self.field_guest_mode = None
@@ -57,6 +61,8 @@ class Blinds(hass.Hass):
         self.field_bedroom_automation_enabled = None
         self.field_dusk_offset = None
         self.field_dusk_automation_enabled = None
+        self.field_full_open_automation_enabled = None
+        self.field_blinds_pre_dusk_offset = None
         self.field_weekend_open_time = None
         self.field_sunset_offset_time = None
         self.field_full_open_time = None
@@ -71,6 +77,8 @@ class Blinds(hass.Hass):
         self.field_bedroom_automation_enabled = self.args["bedroom_automation_enabled_input"]
         self.field_dusk_offset = self.args["dusk_offset_input"]
         self.field_dusk_automation_enabled = self.args["dusk_automation_enabled_input"]
+        self.field_full_open_automation_enabled = self.args["full_open_automation_enabled_input"]
+        self.field_blinds_pre_dusk_offset = self.args["blinds_pre_dusk_offset_input"]
         # self.field_weekend_open_time = self.args["weekend_open_time_input"]
         # self.field_sunset_offset_time = self.args["sunset_offset_time_input"]
         # self.field_full_open_time = self.args["full_open_time_input"]
@@ -85,6 +93,8 @@ class Blinds(hass.Hass):
         self.update_blind_dusk_offset()
         self.update_dusk_time()
         self.update_blind_dusk_automation_enabled()
+        self.update_blind_full_open_automation_enabled()
+        self.update_blind_pre_dusk_offset()
 
         # Listen for changes to the input_datetime entity
         self.listen_state(self.update_blind_open_time, self.field_weekdays_open_time)
@@ -94,6 +104,8 @@ class Blinds(hass.Hass):
         self.listen_state(self.update_blind_bedroom_automation_enabled, self.field_bedroom_automation_enabled)
         self.listen_state(self.update_blind_dusk_offset, self.field_dusk_offset)
         self.listen_state(self.update_blind_dusk_automation_enabled, self.field_dusk_automation_enabled)
+        self.listen_state(self.update_blind_full_open_automation_enabled, self.field_full_open_automation_enabled)
+        self.listen_state(self.update_blind_pre_dusk_offset, self.field_blinds_pre_dusk_offset)
 
         # Listen to scene changes
         self.listen_event(self.scene_activated, "call_service", domain="scene", service="turn_on")
@@ -147,10 +159,19 @@ class Blinds(hass.Hass):
             self.log("Failed to retrieve dusk time state.")
             return
 
+        sun_next_noon_str = self.get_state("sensor.sun_next_noon")
         try:
             self.next_dusk_time = datetime.datetime.fromisoformat(dusk_time_str.replace("Z", "+00:00"))
+            self.next_noon_time = (
+                datetime.datetime.fromisoformat(sun_next_noon_str.replace("Z", "+00:00"))
+                if sun_next_noon_str is not None
+                else self.next_noon_time
+            )
+
             self.log(f"{self.next_dusk_time=}")
+            self.log(f"{self.next_noon_time=}")
             self.on_dusk_recompute()
+            self.on_pre_dusk_recompute()
         except Exception as e:
             self.log(f"Failed to retrieve dusk time state: {e}, {dusk_time_str=}")
 
@@ -214,6 +235,23 @@ class Blinds(hass.Hass):
         self.dusk_automation_enabled = self.to_bool(self.get_state(self.field_dusk_automation_enabled))
         self.log(f"{self.dusk_automation_enabled=}")
 
+    def update_blind_full_open_automation_enabled(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
+        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        self.full_open_automation_enabled = self.to_bool(self.get_state(self.field_full_open_automation_enabled))
+        self.log(f"{self.full_open_automation_enabled=}")
+
+    def update_blind_pre_dusk_offset(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
+        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        value = self.get_state(self.field_blinds_pre_dusk_offset)
+
+        if value is None:
+            self.log("Failed to retrieve field_blinds_pre_dusk_offset state.")
+            return
+
+        self.pre_dusk_offset = self.parse_time(value)
+        self.log(f"{self.pre_dusk_offset=}")
+        self.on_pre_dusk_recompute()
+
     def on_dusk_recompute(self):
         try:
             total_offset = datetime.timedelta(hours=self.dusk_offset.hour - 12, minutes=self.dusk_offset.minute)
@@ -227,6 +265,28 @@ class Blinds(hass.Hass):
             self.dusk_timer = self.run_at(self.blinds_on_dusk_event, adjusted_dusk_time)
         except Exception as e:
             self.log(f"Error in dusk recomputation: {e}")
+
+    def on_pre_dusk_recompute(self):
+        try:
+            total_offset = datetime.timedelta(hours=self.pre_dusk_offset.hour - 12, minutes=self.pre_dusk_offset.minute)
+            time_diff = (
+                datetime.datetime(
+                    year=2000, day=1, month=1, hour=self.next_dusk_time.hour, minute=self.next_dusk_time.minute
+                )
+                - datetime.datetime(
+                    year=2000, day=1, month=1, hour=self.next_noon_time.hour, minute=self.next_noon_time.minute
+                )
+            ) / 2
+            adjusted_pre_dusk_time = self.next_noon_time + time_diff + total_offset
+            self.log(f"Scheduling event for pre-dusk at {adjusted_pre_dusk_time}, {total_offset=}, {time_diff=}.")
+
+            if self.pre_dusk_timer is not None:
+                self.cancel_timer(self.pre_dusk_timer)
+                self.log("Previous pre-dusk timer canceled.")
+
+            self.pre_dusk_timer = self.run_at(self.blinds_on_pre_dusk_event, adjusted_pre_dusk_time)
+        except Exception as e:
+            self.log(f"Error in pre-dusk recomputation: {e}")
 
     def scene_activated(self, event_name, data, kwargs):
         # Extract the scene ID or entity ID
@@ -388,6 +448,12 @@ class Blinds(hass.Hass):
             self.log("Dusk automation disabled")
             return
         self.blinds_living_down_privacy()
+
+    def blinds_on_pre_dusk_event(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
+        if not self.full_open_automation_enabled or not self.automation_enabled:
+            self.log("Pre Dusk automation disabled")
+            return
+        self.blinds_all_up()
 
     def blind_move(self, blind, pos: Optional[float], tilt: float):
         if pos is None:
