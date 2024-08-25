@@ -46,6 +46,7 @@ class Blinds(hass.Hass):
         self.bedroom_automation_enabled: bool = True
         self.next_dusk_time: Optional[datetime.datetime] = None
         self.next_noon_time: Optional[datetime.datetime] = None
+        self.next_midnight_time: Optional[datetime.datetime] = None
         self.dusk_offset: Optional[datetime.time] = None
         self.pre_dusk_offset: Optional[datetime.time] = None
         self.dusk_automation_enabled = True
@@ -160,6 +161,7 @@ class Blinds(hass.Hass):
             return
 
         sun_next_noon_str = self.get_state("sensor.sun_next_noon")
+        sun_next_midnight_str = self.get_state("sensor.sun_next_midnight")
         try:
             self.next_dusk_time = datetime.datetime.fromisoformat(dusk_time_str.replace("Z", "+00:00"))
             self.next_noon_time = (
@@ -167,9 +169,15 @@ class Blinds(hass.Hass):
                 if sun_next_noon_str is not None
                 else self.next_noon_time
             )
+            self.next_midnight_time = (
+                datetime.datetime.fromisoformat(sun_next_midnight_str.replace("Z", "+00:00"))
+                if sun_next_midnight_str is not None
+                else self.next_midnight_time
+            )
 
             self.log(f"{self.next_dusk_time=}")
             self.log(f"{self.next_noon_time=}")
+            self.log(f"{self.next_midnight_time=}")
             self.on_dusk_recompute()
             self.on_pre_dusk_recompute()
         except Exception as e:
@@ -254,6 +262,7 @@ class Blinds(hass.Hass):
 
     def on_dusk_recompute(self):
         try:
+            # TODO: maybe to dusk + (midnight - dusk) / 2
             total_offset = datetime.timedelta(hours=self.dusk_offset.hour - 12, minutes=self.dusk_offset.minute)
             adjusted_dusk_time = self.next_dusk_time + total_offset
             self.log(f"Scheduling event for dusk at {adjusted_dusk_time} with offset of {total_offset}.")
