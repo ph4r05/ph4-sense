@@ -16,6 +16,9 @@ input_boolean:
   blinds_bedroom_automation_enabled:
     name: "Blinds Bedroom enabled"
     initial: false
+  blinds_dusk_automation_enabled:
+    name: "Blinds Dusk Automation enabled"
+    initial: true
 
 input_datetime:
   blinds_weekday_open_time:

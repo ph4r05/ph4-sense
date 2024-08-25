@@ -14,8 +14,9 @@ class BlindsState(Enum):
     AFTERNOON_UP = auto()
     DUSK_MODE = auto()
     PRIVACY_MODE = auto()
-    NIGHT_MODE = auto()
     NIGHT_VENT = auto()
+    NIGHT_MODE = auto()
+    PRE_DAWN_MODE = auto()
 
 
 class Blinds(hass.Hass):
@@ -23,6 +24,8 @@ class Blinds(hass.Hass):
     TODO: collect manual state changes. manual state change cancels the next routine
     TODO: add pause automation toggle
     TODO: add sync - sets state appropriate for this time of a day
+    TODO: is weekend? disable morning automation till 11:30, but how to detect if it was triggered already?
+    TODO: add new webhook to listen for all manual blinds movements. collect it
     """
 
     BLIND_LIV_BIG = "LivBig"
@@ -36,14 +39,16 @@ class Blinds(hass.Hass):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.blinds = None
-        self.weekdays_open_time = None
-        self.guest_weekdays_open_time = None
+        self.weekdays_open_time: Optional[datetime.time] = None
+        self.guest_weekdays_open_time: Optional[datetime.time] = None
         self.guest_mode: bool = False
         self.automation_enabled: bool = True
         self.bedroom_automation_enabled: bool = True
-        self.next_dusk_time = None
-        self.dusk_offset = None
+        self.next_dusk_time: Optional[datetime.datetime] = None
+        self.dusk_offset: Optional[datetime.time] = None
+        self.dusk_automation_enabled = True
         self.current_state = BlindsState.INITIAL
+        self.dusk_timer = None
 
         self.field_weekdays_open_time = None
         self.field_guest_mode = None
@@ -51,6 +56,7 @@ class Blinds(hass.Hass):
         self.field_guest_weekdays_open_time = None
         self.field_bedroom_automation_enabled = None
         self.field_dusk_offset = None
+        self.field_dusk_automation_enabled = None
         self.field_weekend_open_time = None
         self.field_sunset_offset_time = None
         self.field_full_open_time = None
@@ -64,6 +70,7 @@ class Blinds(hass.Hass):
         self.field_automation_enabled = self.args["automation_enabled_input"]
         self.field_bedroom_automation_enabled = self.args["bedroom_automation_enabled_input"]
         self.field_dusk_offset = self.args["dusk_offset_input"]
+        self.field_dusk_automation_enabled = self.args["dusk_automation_enabled_input"]
         # self.field_weekend_open_time = self.args["weekend_open_time_input"]
         # self.field_sunset_offset_time = self.args["sunset_offset_time_input"]
         # self.field_full_open_time = self.args["full_open_time_input"]
@@ -77,6 +84,7 @@ class Blinds(hass.Hass):
         self.update_blind_bedroom_automation_enabled()
         self.update_blind_dusk_offset()
         self.update_dusk_time()
+        self.update_blind_dusk_automation_enabled()
 
         # Listen for changes to the input_datetime entity
         self.listen_state(self.update_blind_open_time, self.field_weekdays_open_time)
@@ -85,6 +93,7 @@ class Blinds(hass.Hass):
         self.listen_state(self.update_blind_automation_enabled, self.field_automation_enabled)
         self.listen_state(self.update_blind_bedroom_automation_enabled, self.field_bedroom_automation_enabled)
         self.listen_state(self.update_blind_dusk_offset, self.field_dusk_offset)
+        self.listen_state(self.update_blind_dusk_automation_enabled, self.field_dusk_automation_enabled)
 
         # Listen to scene changes
         self.listen_event(self.scene_activated, "call_service", domain="scene", service="turn_on")
@@ -141,6 +150,7 @@ class Blinds(hass.Hass):
         try:
             self.next_dusk_time = datetime.datetime.fromisoformat(dusk_time_str.replace("Z", "+00:00"))
             self.log(f"{self.next_dusk_time=}")
+            self.on_dusk_recompute()
         except Exception as e:
             self.log(f"Failed to retrieve dusk time state: {e}, {dusk_time_str=}")
 
@@ -197,6 +207,26 @@ class Blinds(hass.Hass):
 
         self.dusk_offset = self.parse_time(value)
         self.log(f"{self.dusk_offset=}")
+        self.on_dusk_recompute()
+
+    def update_blind_dusk_automation_enabled(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
+        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        self.dusk_automation_enabled = self.to_bool(self.get_state(self.field_dusk_automation_enabled))
+        self.log(f"{self.dusk_automation_enabled=}")
+
+    def on_dusk_recompute(self):
+        try:
+            total_offset = datetime.timedelta(hours=12 - self.dusk_offset.hour, minutes=self.dusk_offset.minute)
+            adjusted_dusk_time = self.next_dusk_time + total_offset
+            self.log(f"Scheduling event for dusk at {adjusted_dusk_time} with offset of {total_offset}.")
+
+            if self.dusk_timer is not None:
+                self.cancel_timer(self.dusk_timer)
+                self.log("Previous dusk timer canceled.")
+
+            self.dusk_timer = self.run_at(self.blinds_on_dusk_event, adjusted_dusk_time)
+        except Exception as e:
+            self.log(f"Error in dusk recomputation: {e}")
 
     def scene_activated(self, event_name, data, kwargs):
         # Extract the scene ID or entity ID
@@ -352,6 +382,12 @@ class Blinds(hass.Hass):
 
         if self.bedroom_automation_enabled:
             self.blinds_pos_tilt(self.BLIND_BEDROOM, 100, 0)
+
+    def blinds_on_dusk_event(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
+        if not self.dusk_automation_enabled or not self.automation_enabled:
+            self.log("Dusk automation disabled")
+            return
+        self.blinds_living_down_privacy()
 
     def blind_move(self, blind, pos: Optional[float], tilt: float):
         if pos is None:
