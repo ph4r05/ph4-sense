@@ -279,13 +279,17 @@ class Blinds(hass.Hass):
         try:
             total_offset = datetime.timedelta(hours=self.pre_dusk_offset.hour - 12, minutes=self.pre_dusk_offset.minute)
             time_diff = (
-                datetime.datetime(
-                    year=2000, day=1, month=1, hour=self.next_dusk_time.hour, minute=self.next_dusk_time.minute
+                (
+                    datetime.datetime(
+                        year=2000, day=1, month=1, hour=self.next_dusk_time.hour, minute=self.next_dusk_time.minute
+                    )
+                    - datetime.datetime(
+                        year=2000, day=1, month=1, hour=self.next_noon_time.hour, minute=self.next_noon_time.minute
+                    )
                 )
-                - datetime.datetime(
-                    year=2000, day=1, month=1, hour=self.next_noon_time.hour, minute=self.next_noon_time.minute
-                )
-            ) / 2
+                * 2
+                / 3
+            )
             adjusted_pre_dusk_time = self.next_noon_time + time_diff + total_offset
             self.log(f"Scheduling event for pre-dusk at {adjusted_pre_dusk_time}, {total_offset=}, {time_diff=}.")
 
