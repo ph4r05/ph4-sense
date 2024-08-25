@@ -216,7 +216,7 @@ class Blinds(hass.Hass):
 
     def on_dusk_recompute(self):
         try:
-            total_offset = datetime.timedelta(hours=12 - self.dusk_offset.hour, minutes=self.dusk_offset.minute)
+            total_offset = datetime.timedelta(hours=self.dusk_offset.hour - 12, minutes=self.dusk_offset.minute)
             adjusted_dusk_time = self.next_dusk_time + total_offset
             self.log(f"Scheduling event for dusk at {adjusted_dusk_time} with offset of {total_offset}.")
 
