@@ -112,7 +112,7 @@ class Blinds(hass.Hass):
         self.listen_event(self.scene_activated, "call_service", domain="scene", service="turn_on")
 
         # Daily update new dusk time
-        self.run_daily(self.update_dusk_time, time(hour=0, minute=0))
+        self.run_daily(self.update_dusk_time, time(hour=2, minute=0))
 
         # TODO: separate bedroom - add another timer, bedroom mode.
         # TODO: dusk timer, sensor.sun_next_dusk
@@ -132,7 +132,12 @@ class Blinds(hass.Hass):
         # # Schedule to lower and tilt blinds 1 hour after sunset
         # self.run_at_sunset(self.lower_and_tilt_blinds, offset=3600)  # offset in seconds
 
-        self.log(f"initialized, {self.weekdays_open_time=}, {self.guest_mode=}")
+        self.log(
+            f"initialized, {self.weekdays_open_time=}, {self.guest_mode=}, now: {datetime.datetime.now()}"
+            f", {self.full_open_automation_enabled=}, {self.dusk_automation_enabled=}"
+            f", {self.bedroom_automation_enabled=}, {self.automation_enabled=}"
+            f", {self.dusk_offset=}, {self.pre_dusk_offset=}"
+        )
 
     def transition_function(self):
         pass
@@ -218,12 +223,12 @@ class Blinds(hass.Hass):
 
     def update_blind_automation_enabled(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
         self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
-        self.automation_enabled = self.to_bool(self.get_state(self.field_guest_mode))
+        self.automation_enabled = self.to_bool(self.get_state(self.field_automation_enabled))
         self.log(f"{self.automation_enabled=}")
 
     def update_blind_bedroom_automation_enabled(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
         self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
-        self.bedroom_automation_enabled = self.to_bool(self.get_state(self.field_guest_mode))
+        self.bedroom_automation_enabled = self.to_bool(self.get_state(self.field_bedroom_automation_enabled))
         self.log(f"{self.bedroom_automation_enabled=}")
 
     def update_blind_dusk_offset(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
@@ -265,7 +270,10 @@ class Blinds(hass.Hass):
             # TODO: maybe to dusk + (midnight - dusk) / 2
             total_offset = datetime.timedelta(hours=self.dusk_offset.hour - 12, minutes=self.dusk_offset.minute)
             adjusted_dusk_time = self.next_dusk_time + total_offset
-            self.log(f"Scheduling event for dusk at {adjusted_dusk_time} with offset of {total_offset}.")
+            self.log(
+                f"Scheduling event for dusk at {adjusted_dusk_time} with offset of {total_offset}"
+                f", {self.dusk_automation_enabled=}, {self.automation_enabled}"
+            )
 
             if self.dusk_timer is not None:
                 self.cancel_timer(self.dusk_timer)
@@ -279,19 +287,18 @@ class Blinds(hass.Hass):
         try:
             total_offset = datetime.timedelta(hours=self.pre_dusk_offset.hour - 12, minutes=self.pre_dusk_offset.minute)
             time_diff = (
-                (
-                    datetime.datetime(
-                        year=2000, day=1, month=1, hour=self.next_dusk_time.hour, minute=self.next_dusk_time.minute
-                    )
-                    - datetime.datetime(
-                        year=2000, day=1, month=1, hour=self.next_noon_time.hour, minute=self.next_noon_time.minute
-                    )
+                datetime.datetime(
+                    year=2000, day=1, month=1, hour=self.next_dusk_time.hour, minute=self.next_dusk_time.minute
                 )
-                * 2
-                / 3
-            )
+                - datetime.datetime(
+                    year=2000, day=1, month=1, hour=self.next_noon_time.hour, minute=self.next_noon_time.minute
+                )
+            ) / 2
             adjusted_pre_dusk_time = self.next_noon_time + time_diff + total_offset
-            self.log(f"Scheduling event for pre-dusk at {adjusted_pre_dusk_time}, {total_offset=}, {time_diff=}.")
+            self.log(
+                f"Scheduling event for pre-dusk at {adjusted_pre_dusk_time}, {total_offset=}, {time_diff=},"
+                f", {self.full_open_automation_enabled=}, {self.automation_enabled=}"
+            )
 
             if self.pre_dusk_timer is not None:
                 self.cancel_timer(self.pre_dusk_timer)
@@ -458,13 +465,13 @@ class Blinds(hass.Hass):
 
     def blinds_on_dusk_event(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
         if not self.dusk_automation_enabled or not self.automation_enabled:
-            self.log("Dusk automation disabled")
+            self.log(f"Dusk automation disabled, {self.dusk_automation_enabled=}, {self.automation_enabled=}")
             return
         self.blinds_living_down_privacy()
 
     def blinds_on_pre_dusk_event(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
         if not self.full_open_automation_enabled or not self.automation_enabled:
-            self.log("Pre Dusk automation disabled")
+            self.log(f"Pre Dusk automation disabled, {self.full_open_automation_enabled=}, {self.automation_enabled=}")
             return
         self.blinds_all_up()
 
