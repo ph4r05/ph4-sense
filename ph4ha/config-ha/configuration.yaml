@@ -22,6 +22,12 @@ input_boolean:
   blinds_full_open_automation_enabled:
     name: "Blinds Full Open Automation enabled"
     initial: true
+  blinds_night_venting_enabled:
+    name: "Blinds Night Venting enabled"
+    initial: true
+  blinds_close_on_dawn_enabled:
+    name: "Blinds Close on Dawn enabled"
+    initial: true
 
 input_datetime:
   blinds_weekday_open_time:

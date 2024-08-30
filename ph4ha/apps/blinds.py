@@ -44,19 +44,23 @@ class Blinds(hass.Hass):
         self.guest_mode: bool = False
         self.automation_enabled: bool = True
         self.bedroom_automation_enabled: bool = True
+        self.night_venting_enabled: bool = True
+        self.close_on_dawn_enabled: bool = True
         self.next_dawn_time: Optional[datetime.datetime] = None
         self.next_dusk_time: Optional[datetime.datetime] = None
         self.next_noon_time: Optional[datetime.datetime] = None
         self.next_sunrise_time: Optional[datetime.datetime] = None
         self.next_sunset_time: Optional[datetime.datetime] = None
         self.next_midnight_time: Optional[datetime.datetime] = None
-        self.dusk_offset: Optional[datetime.time] = None
-        self.pre_dusk_offset: Optional[datetime.time] = None
+        self.dusk_offset: datetime.time = datetime.time(hour=12)
+        self.pre_dusk_offset: datetime.time = datetime.time(hour=12)
+        self.pre_dawn_offset: datetime.time = datetime.time(hour=12)
         self.dusk_automation_enabled = True
         self.current_state = BlindsState.INITIAL
         self.full_open_automation_enabled = None
         self.dusk_timer = None
         self.pre_dusk_timer = None
+        self.dawn_timer = None
 
         self.field_weekdays_open_time = None
         self.field_guest_mode = None
@@ -66,6 +70,8 @@ class Blinds(hass.Hass):
         self.field_dusk_offset = None
         self.field_dusk_automation_enabled = None
         self.field_full_open_automation_enabled = None
+        self.field_night_venting_enabled = None
+        self.field_close_on_dawn_enabled = None
         self.field_blinds_pre_dusk_offset = None
         self.field_weekend_open_time = None
         self.field_sunset_offset_time = None
@@ -79,10 +85,13 @@ class Blinds(hass.Hass):
         self.field_guest_mode = self.args["guest_mode_input"]
         self.field_automation_enabled = self.args["automation_enabled_input"]
         self.field_bedroom_automation_enabled = self.args["bedroom_automation_enabled_input"]
+        self.field_night_venting_enabled = self.args["night_venting_enabled_input"]
+        self.field_close_on_dawn_enabled = self.args["close_on_dawn_enabled_input"]
         self.field_dusk_offset = self.args["dusk_offset_input"]
         self.field_dusk_automation_enabled = self.args["dusk_automation_enabled_input"]
         self.field_full_open_automation_enabled = self.args["full_open_automation_enabled_input"]
         self.field_blinds_pre_dusk_offset = self.args["blinds_pre_dusk_offset_input"]
+
         # self.field_weekend_open_time = self.args["weekend_open_time_input"]
         # self.field_sunset_offset_time = self.args["sunset_offset_time_input"]
         # self.field_full_open_time = self.args["full_open_time_input"]
@@ -93,29 +102,33 @@ class Blinds(hass.Hass):
         self.update_blind_open_time_guest()
         self.update_blind_guest_mode()
         self.update_blind_automation_enabled()
-        self.update_blind_bedroom_automation_enabled()
-        self.update_blind_dusk_offset()
-        self.update_dusk_time()
         self.update_blind_dusk_automation_enabled()
+        self.update_blind_bedroom_automation_enabled()
         self.update_blind_full_open_automation_enabled()
+        self.update_blind_night_venting_enabled()
+        self.update_blind_close_on_dawn_enabled()
+        self.update_blind_dusk_offset()
         self.update_blind_pre_dusk_offset()
+        self.update_sun_times()
 
         # Listen for changes to the input_datetime entity
         self.listen_state(self.update_blind_open_time, self.field_weekdays_open_time)
         self.listen_state(self.update_blind_open_time_guest, self.field_guest_weekdays_open_time)
         self.listen_state(self.update_blind_guest_mode, self.field_guest_mode)
         self.listen_state(self.update_blind_automation_enabled, self.field_automation_enabled)
-        self.listen_state(self.update_blind_bedroom_automation_enabled, self.field_bedroom_automation_enabled)
-        self.listen_state(self.update_blind_dusk_offset, self.field_dusk_offset)
         self.listen_state(self.update_blind_dusk_automation_enabled, self.field_dusk_automation_enabled)
+        self.listen_state(self.update_blind_bedroom_automation_enabled, self.field_bedroom_automation_enabled)
         self.listen_state(self.update_blind_full_open_automation_enabled, self.field_full_open_automation_enabled)
+        self.listen_state(self.update_blind_night_venting_enabled, self.field_night_venting_enabled)
+        self.listen_state(self.update_blind_close_on_dawn_enabled, self.field_close_on_dawn_enabled)
+        self.listen_state(self.update_blind_dusk_offset, self.field_dusk_offset)
         self.listen_state(self.update_blind_pre_dusk_offset, self.field_blinds_pre_dusk_offset)
 
         # Listen to scene changes
         self.listen_event(self.scene_activated, "call_service", domain="scene", service="turn_on")
 
         # Daily update new dusk time
-        self.run_daily(self.update_dusk_time, time(hour=2, minute=0))
+        self.run_daily(self.update_sun_times, time(hour=1, minute=30))
 
         # TODO: separate bedroom - add another timer, bedroom mode.
         # TODO: dusk timer, sensor.sun_next_dusk
@@ -160,7 +173,7 @@ class Blinds(hass.Hass):
         # Find the next state in the timeline
         pass
 
-    def update_dusk_time(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
+    def update_sun_times(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
         self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
 
         dusk_time_str = self.get_state("sensor.sun_next_dusk")
@@ -209,6 +222,7 @@ class Blinds(hass.Hass):
             self.log(f"{self.next_sunset_time=}")
             self.on_dusk_recompute()
             self.on_pre_dusk_recompute()
+            self.on_dawn_recompute()
         except Exception as e:
             self.log(f"Failed to retrieve dusk time state: {e}, {dusk_time_str=}")
 
@@ -254,6 +268,16 @@ class Blinds(hass.Hass):
         self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
         self.bedroom_automation_enabled = self.to_bool(self.get_state(self.field_bedroom_automation_enabled))
         self.log(f"{self.bedroom_automation_enabled=}")
+
+    def update_blind_night_venting_enabled(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
+        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        self.night_venting_enabled = self.to_bool(self.get_state(self.field_night_venting_enabled))
+        self.log(f"{self.night_venting_enabled=}")
+
+    def update_blind_close_on_dawn_enabled(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
+        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        self.close_on_dawn_enabled = self.to_bool(self.get_state(self.field_close_on_dawn_enabled))
+        self.log(f"{self.close_on_dawn_enabled=}")
 
     def update_blind_dusk_offset(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
         self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
@@ -333,6 +357,25 @@ class Blinds(hass.Hass):
                 self.log("Previous pre-dusk timer canceled.")
 
             self.pre_dusk_timer = self.run_at(self.blinds_on_pre_dusk_event, adjusted_pre_dusk_time)
+        except Exception as e:
+            self.log(f"Error in pre-dusk recomputation: {e}")
+
+    def on_dawn_recompute(self):
+        try:
+            total_offset = datetime.timedelta(
+                hours=self.pre_dawn_offset.hour, minutes=self.pre_dawn_offset.minute
+            ) - datetime.timedelta(hours=12, minutes=0)
+            adjusted_pre_dawn_time = self.next_dawn_time + total_offset
+            self.log(
+                f"Scheduling event for pre-dawn at {adjusted_pre_dawn_time}, {total_offset=},"
+                f", {self.full_open_automation_enabled=}, {self.automation_enabled=}"
+            )
+
+            if self.dawn_timer is not None:
+                self.cancel_timer(self.dawn_timer)
+                self.log("Previous dawn_timer timer canceled.")
+
+            self.dawn_timer = self.run_at(self.blinds_on_pre_dawn_event, adjusted_pre_dawn_time)
         except Exception as e:
             self.log(f"Error in pre-dusk recomputation: {e}")
 
@@ -502,6 +545,12 @@ class Blinds(hass.Hass):
             self.log(f"Pre Dusk automation disabled, {self.full_open_automation_enabled=}, {self.automation_enabled=}")
             return
         self.blinds_all_up()
+
+    def blinds_on_pre_dawn_event(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
+        if not self.close_on_dawn_enabled or not self.automation_enabled:
+            self.log(f"Pre Dawn automation disabled, {self.close_on_dawn_enabled=}, {self.automation_enabled=}")
+            return
+        self.blinds_all_down()
 
     def blind_move(self, blind, pos: Optional[float], tilt: float):
         if pos is None:

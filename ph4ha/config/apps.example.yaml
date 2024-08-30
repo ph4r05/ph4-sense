@@ -36,6 +36,8 @@ blinds:
   dusk_automation_enabled_input: "input_boolean.blinds_dusk_automation_enabled"
   full_open_automation_enabled_input: "input_boolean.blinds_full_open_automation_enabled"
   blinds_pre_dusk_offset_input: "input_datetime.blinds_pre_dusk_offset"
+  night_venting_enabled_input: "input_boolean.blinds_night_venting_enabled"
+  close_on_dawn_enabled_input: "input_boolean.blinds_close_on_dawn_enabled"
 
   full_open_time_input: "input_text.weekday_blind_open_time"
   full_close_time_input: "input_text.weekday_blind_open_time"
