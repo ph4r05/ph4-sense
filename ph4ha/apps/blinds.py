@@ -44,8 +44,11 @@ class Blinds(hass.Hass):
         self.guest_mode: bool = False
         self.automation_enabled: bool = True
         self.bedroom_automation_enabled: bool = True
+        self.next_dawn_time: Optional[datetime.datetime] = None
         self.next_dusk_time: Optional[datetime.datetime] = None
         self.next_noon_time: Optional[datetime.datetime] = None
+        self.next_sunrise_time: Optional[datetime.datetime] = None
+        self.next_sunset_time: Optional[datetime.datetime] = None
         self.next_midnight_time: Optional[datetime.datetime] = None
         self.dusk_offset: Optional[datetime.time] = None
         self.pre_dusk_offset: Optional[datetime.time] = None
@@ -167,6 +170,9 @@ class Blinds(hass.Hass):
 
         sun_next_noon_str = self.get_state("sensor.sun_next_noon")
         sun_next_midnight_str = self.get_state("sensor.sun_next_midnight")
+        sun_next_dawn_str = self.get_state("sensor.sun_next_dawn")
+        sun_next_sunrise_str = self.get_state("sensor.sun_next_rising")
+        sun_next_sunset_str = self.get_state("sensor.sun_next_setting")
         try:
             self.next_dusk_time = datetime.datetime.fromisoformat(dusk_time_str.replace("Z", "+00:00"))
             self.next_noon_time = (
@@ -179,10 +185,28 @@ class Blinds(hass.Hass):
                 if sun_next_midnight_str is not None
                 else self.next_midnight_time
             )
+            self.next_dawn_time = (
+                datetime.datetime.fromisoformat(sun_next_dawn_str.replace("Z", "+00:00"))
+                if sun_next_dawn_str is not None
+                else self.next_dawn_time
+            )
+            self.next_sunrise_time = (
+                datetime.datetime.fromisoformat(sun_next_sunrise_str.replace("Z", "+00:00"))
+                if sun_next_sunrise_str is not None
+                else self.next_sunrise_time
+            )
+            self.next_sunset_time = (
+                datetime.datetime.fromisoformat(sun_next_sunset_str.replace("Z", "+00:00"))
+                if sun_next_sunset_str is not None
+                else self.next_sunset_time
+            )
 
             self.log(f"{self.next_dusk_time=}")
-            self.log(f"{self.next_noon_time=}")
             self.log(f"{self.next_midnight_time=}")
+            self.log(f"{self.next_noon_time=}")
+            self.log(f"{self.next_dawn_time=}")
+            self.log(f"{self.next_sunrise_time=}")
+            self.log(f"{self.next_sunset_time=}")
             self.on_dusk_recompute()
             self.on_pre_dusk_recompute()
         except Exception as e:
@@ -268,7 +292,9 @@ class Blinds(hass.Hass):
     def on_dusk_recompute(self):
         try:
             # TODO: maybe to dusk + (midnight - dusk) / 2
-            total_offset = datetime.timedelta(hours=self.dusk_offset.hour - 12, minutes=self.dusk_offset.minute)
+            total_offset = datetime.timedelta(
+                hours=self.dusk_offset.hour, minutes=self.dusk_offset.minute
+            ) - datetime.timedelta(hours=12, minutes=0)
             adjusted_dusk_time = self.next_dusk_time + total_offset
             self.log(
                 f"Scheduling event for dusk at {adjusted_dusk_time} with offset of {total_offset}"
@@ -285,7 +311,9 @@ class Blinds(hass.Hass):
 
     def on_pre_dusk_recompute(self):
         try:
-            total_offset = datetime.timedelta(hours=self.pre_dusk_offset.hour - 12, minutes=self.pre_dusk_offset.minute)
+            total_offset = datetime.timedelta(
+                hours=self.pre_dusk_offset.hour, minutes=self.pre_dusk_offset.minute
+            ) - datetime.timedelta(hours=12, minutes=0)
             time_diff = (
                 datetime.datetime(
                     year=2000, day=1, month=1, hour=self.next_dusk_time.hour, minute=self.next_dusk_time.minute
@@ -296,7 +324,7 @@ class Blinds(hass.Hass):
             ) / 2
             adjusted_pre_dusk_time = self.next_noon_time + time_diff + total_offset
             self.log(
-                f"Scheduling event for pre-dusk at {adjusted_pre_dusk_time}, {total_offset=}, {time_diff=},"
+                f"Scheduling event for pre-dusk at {adjusted_pre_dusk_time}, {total_offset=}, {time_diff=}"
                 f", {self.full_open_automation_enabled=}, {self.automation_enabled=}"
             )
 
