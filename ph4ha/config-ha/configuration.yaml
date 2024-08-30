@@ -48,6 +48,14 @@ input_datetime:
     has_date: false
     has_time: true
     initial: "12:00"
+  blinds_pre_dusk_final:
+    name: Blinds Pre Dusk final
+    has_date: true
+    has_time: true
+  blinds_dusk_final:
+    name: Blinds Dusk final
+    has_date: true
+    has_time: true
 
 switch:
   - platform: template

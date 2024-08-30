@@ -330,6 +330,7 @@ class Blinds(hass.Hass):
                 self.log("Previous dusk timer canceled.")
 
             self.dusk_timer = self.run_at(self.blinds_on_dusk_event, adjusted_dusk_time)
+            self.set_state("input_datetime.blinds_dusk_final", state=self.fmt_datetime(adjusted_dusk_time))
         except Exception as e:
             self.log(f"Error in dusk recomputation: {e}")
 
@@ -357,6 +358,7 @@ class Blinds(hass.Hass):
                 self.log("Previous pre-dusk timer canceled.")
 
             self.pre_dusk_timer = self.run_at(self.blinds_on_pre_dusk_event, adjusted_pre_dusk_time)
+            self.set_state("input_datetime.blinds_pre_dusk_final", state=self.fmt_datetime(adjusted_pre_dusk_time))
         except Exception as e:
             self.log(f"Error in pre-dusk recomputation: {e}")
 
@@ -367,7 +369,7 @@ class Blinds(hass.Hass):
             ) - datetime.timedelta(hours=12, minutes=0)
             adjusted_pre_dawn_time = self.next_dawn_time + total_offset
             self.log(
-                f"Scheduling event for pre-dawn at {adjusted_pre_dawn_time}, {total_offset=},"
+                f"Scheduling event for pre-dawn at {adjusted_pre_dawn_time}, {total_offset=}"
                 f", {self.full_open_automation_enabled=}, {self.automation_enabled=}"
             )
 
@@ -577,3 +579,6 @@ class Blinds(hass.Hass):
 
     def to_bool(self, inp):
         return inp == "on"
+
+    def fmt_datetime(self, dtime):
+        return dtime.strftime("%Y-%m-%d %H:%M:%S")
