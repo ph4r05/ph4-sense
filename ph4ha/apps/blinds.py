@@ -35,6 +35,7 @@ class Blinds(hass.Hass):
     BLIND_SKLAD = "Sklad"
     ALL_BLINDS = [BLIND_LIV_BIG, BLIND_LIV_DOOR, BLIND_BEDROOM, BLIND_STUDY, BLIND_SKLAD]
     OPEN_HALF = 0.9
+    OPEN_PRIVACY = 0.7
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -470,7 +471,7 @@ class Blinds(hass.Hass):
         self.blinds_pos_tilt(self.BLIND_LIV_BIG, 0, self.OPEN_HALF)
 
     def blinds_living_down_privacy(self):
-        self.blinds_pos_tilt(self.BLIND_LIV_BIG, 0, 0.7)
+        self.blinds_pos_tilt(self.BLIND_LIV_BIG, 0, self.OPEN_PRIVACY)
 
     def blinds_all_up(self):
         self.blinds_pos_tilt(self.BLIND_LIV_BIG, 100, 0)
@@ -541,6 +542,8 @@ class Blinds(hass.Hass):
             self.log(f"Dusk automation disabled, {self.dusk_automation_enabled=}, {self.automation_enabled=}")
             return
         self.blinds_living_down_privacy()
+        self.blinds_pos_tilt(self.BLIND_SKLAD, 0, self.OPEN_PRIVACY)
+        self.blinds_pos_tilt(self.BLIND_STUDY, 0, self.OPEN_PRIVACY)
 
     def blinds_on_pre_dusk_event(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
         if not self.full_open_automation_enabled or not self.automation_enabled:
