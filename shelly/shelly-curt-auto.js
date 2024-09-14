@@ -2,7 +2,6 @@
 const State = {
   IDLE: "IDLE",
   STOPPING: "STOPPING",
-  STOPPING_TILT: "STOPPING_TILT",
   MOVING_TO_POSITION: "MOVING_TO_POSITION",
   TILTING: "TILTING",
   TILTING2: "TILTING2",
@@ -18,7 +17,9 @@ const ALLOW_DOWN_OPTIMIZATION = true;
 
 let currentState = State.IDLE;
 let currentOperation = null;
-let currentCoverStatus = null;
+let currentCoverStatus = null;  // loaded by Cover.GetStatus, loadStatus() function
+let logicalOpClock = 0;
+let latestMovementEvent = null;
 
 function max(a, b) {
   return a > b ? a : b;
@@ -102,19 +103,29 @@ function loadStatus(callback) {
 }
 
 function processEvent() {
+    if (currentOperation && currentOperation.clock) {
+      if (currentOperation.clock < logicalOpClock) {
+        print("Event for older operation, ignoring");
+        return;
+      }
+    }
+
     switch (currentState) {
       case State.STOPPING:
+      case State.IDLE:
         if (currentOperation) {
           const pos = currentOperation.pos;
-          if (currentCoverStatus && currentCoverStatus.current_pos === pos) {
+          if (currentCoverStatus && (currentCoverStatus.current_pos - pos) <= 1) {
+            // We are in the position already
+            print("[idle] In position already");
             transitionState(State.MOVING_TO_POSITION, currentOperation);
             processEvent();
           } else {
+            // Move to the desired position
+            print("[idle] Go to position");
             transitionState(State.MOVING_TO_POSITION, currentOperation);
             Shelly.call("Cover.GoToPosition", { id: 0, pos: pos });
           }
-        } else {
-          transitionState(State.IDLE, null);
         }
         break;
 
@@ -122,23 +133,34 @@ function processEvent() {
         const movementDiff = currentCoverStatus ? currentCoverStatus.current_pos - currentOperation.pos : null;
         if (movementDiff !== null && movementDiff >= MIN_MOVEMENT_TO_KNOWN_STATE) {
           // if blinds moved at least 2% downwards, TILTING will be skipped as the blinds angle is already known
+          print("[mov] go to tilt; already down");
           transitionState(State.TILTING, currentOperation);
           return processEvent();
         } else if (ALLOW_DOWN_OPTIMIZATION && movementDiff !== null && movementDiff <= -2*MIN_MOVEMENT_TO_KNOWN_STATE) {
           // if blinds moved at least 2% upwards, TILTING will be skipped as the blinds angle is already known
+          print("[mov] go to tilt up; already up");
           transitionState(State.TILTING_UPWARDS, currentOperation);
           return processEvent();
         } else {
-          transitionState(State.TILTING, currentOperation);
-          performTiltClosing();
+          if (ALLOW_DOWN_OPTIMIZATION && movementDiff !== null && movementDiff < 0) { // went up
+            print("[mov] tilting opening");
+            transitionState(State.TILTING_UPWARDS, currentOperation);
+            performTiltOpening();
+          } else {
+            print("[mov] tilting closing");
+            transitionState(State.TILTING, currentOperation);
+            performTiltClosing();
+          }
         }
         break;
 
       case State.TILTING:  // was tilting and stopped, what next?
         if (currentOperation.tilt_duration < 0.05) {
+          // Tilt is under the minimal threshold, no tilting will be done. Switch to the terminal state
           transitionState(State.TILTING2, currentOperation);
           return processEvent();
         }
+        // Tilt by moving upwards from closed position given amount of time
         transitionState(State.TILTING2, currentOperation);
         performTilt(currentOperation.tilt_duration);
         break;
@@ -147,9 +169,11 @@ function processEvent() {
         const newDuration = recomputeTiltForSwitchedDirection(currentOperation.tilt_duration);
         print("Optimizing by tilt down, original duration ", currentOperation.tilt_duration, ", recomputed ", newDuration);
         if (newDuration < 0.05) {
+          // Tilt is under the minimal threshold, no tilting will be done. Switch to the terminal state
           transitionState(State.TILTING2, currentOperation);
           return processEvent();
         }
+        // Tilt by moving downwards from open position given amount of time
         transitionState(State.TILTING2, currentOperation);
         performTiltDownwards(newDuration);
         break;
@@ -165,19 +189,58 @@ function processEvent() {
 Shelly.addEventHandler(function (event) {
   print("Global event handler: ", JSON.stringify(event));
 
+  // Store last operation
+  if (event.info) {
+    if (event.info.event === "opening" || event.info.event === "closing") {
+      print("Detected ongoing event", event.info.event)
+      latestMovementEvent = event;
+    } else if (event.info.event === "stopped" || event.info.event === "closed" || event.info.event === "opened") {
+      print("Detected stopping event", event.info.event)
+      latestMovementEvent = null;
+    }
+  }
+
+  // Automation processing
   if (event.info && (event.info.event === "stopped" || event.info.event === "closed" || event.info.event === "opened")) {
     processEvent();
   }
 }, null);
 
+function isActiveMovementOngoing() {
+  if (latestMovementEvent == null || !latestMovementEvent.info) {
+    return false;
+  }
+
+  const ts = latestMovementEvent.info.ts;
+  const curTime = Shelly.getComponentStatus("sys").unixtime;
+
+  if (!ts || !curTime) {
+    print("Invalid times", ts, curTime);
+    return false;
+  }
+
+  return (curTime - ts) < 60;
+}
+
 function entryPoint(stop_state, transition_state, data) {
     loadStatus(function() {
-      if (currentState !== State.IDLE) {
+      // Increment logical clock to ignore instructions from older calls
+      logicalOpClock += 1;
+      data.clock = logicalOpClock;
+
+      // In the middle of the operation?
+      if (currentState !== State.IDLE || isActiveMovementOngoing()) {
+        print("entry: Active operation detected, stopping");
         transitionState(stop_state, data);
-        Shelly.call("Cover.Stop", { id: 0 }, function (r, error_code, error_message, userdata1) {
-            print("Stop callback", r, error_code, error_message)
-            processEvent();
+        const r = Shelly.call("Cover.Stop", { id: 0 }, function (r, error_code, error_message, userdata1) {
+          // Callback to signalize finish. Let main handler handle this stopping event.
+          print("Stop callback", r, error_code, error_message);
         });
+        if (r != null) {
+          print("Error on stop call");
+          transitionState(transition_state, data);
+          processEvent();
+        }
       } else {
         transitionState(transition_state, data);
         processEvent();
@@ -186,9 +249,9 @@ function entryPoint(stop_state, transition_state, data) {
 }
 
 function tilt(tilt_duration) {
-  entryPoint(State.STOPPING_TILT, State.MOVING_TO_POSITION, {tilt_duration: tilt_duration})
+  entryPoint(State.STOPPING, State.MOVING_TO_POSITION, {tilt_duration: tilt_duration})
 }
 
 function posAndTilt(pos, tilt_duration) {
-  entryPoint(State.STOPPING, State.STOPPING, { pos:pos, tilt_duration:tilt_duration })
+  entryPoint(State.STOPPING, State.IDLE, { pos:pos, tilt_duration:tilt_duration })
 }
