@@ -235,6 +235,13 @@ function entryPoint(stop_state, transition_state, data) {
         const r = Shelly.call("Cover.Stop", { id: 0 }, function (r, error_code, error_message, userdata1) {
           // Callback to signalize finish. Let main handler handle this stopping event.
           print("Stop callback", r, error_code, error_message);
+          if (currentCoverStatus && currentCoverStatus.state) {
+            if (currentCoverStatus.state === 'open' || currentCoverStatus.state === 'closed') {
+              // Callback won't be triggered
+              print("Callback wont be triggered, transitioning")
+              processEvent()
+            }
+          }
         });
         if (r != null) {
           print("Error on stop call");
