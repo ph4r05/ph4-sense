@@ -236,7 +236,7 @@ function entryPoint(stop_state, transition_state, data) {
           // Callback to signalize finish. Let main handler handle this stopping event.
           print("Stop callback", r, error_code, error_message);
           if (currentCoverStatus && currentCoverStatus.state) {
-            if (currentCoverStatus.state === 'open' || currentCoverStatus.state === 'closed') {
+            if (currentCoverStatus.state === 'open' || currentCoverStatus.state === 'closed' || currentCoverStatus.state === 'close') {
               // Callback won't be triggered
               print("Callback wont be triggered, transitioning")
               processEvent()
