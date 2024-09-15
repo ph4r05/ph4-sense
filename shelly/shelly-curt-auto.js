@@ -115,7 +115,7 @@ function processEvent() {
       case State.IDLE:
         if (currentOperation) {
           const pos = currentOperation.pos;
-          if (currentCoverStatus && (currentCoverStatus.current_pos - pos) <= 1) {
+          if (currentCoverStatus && Math.abs(currentCoverStatus.current_pos - pos) <= 1) {
             // We are in the position already
             print("[idle] In position already");
             transitionState(State.MOVING_TO_POSITION, currentOperation);
