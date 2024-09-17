@@ -1,0 +1,9 @@
+/var/log/ph4metrics.log {
+    weekly
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 root adm
+}

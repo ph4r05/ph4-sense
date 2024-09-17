@@ -1,0 +1,28 @@
+# -----------------------------------------
+# /etc/systemd/system/ph4metrics.service
+# -----------------------------------------
+[Unit]
+Description=ph4metrics
+After=network.target
+After=nut-server.service
+
+[Service]
+User=ph4metrics
+Group=ph4metrics
+WorkingDirectory=/tmp
+RuntimeDirectory=/tmp
+
+Type=simple
+Environment=DNS_PUBLIC=tcp
+Environment=TORSOCKS_ALLOW_INBOUND=1
+
+ExecStart=/etc/ph4metrics/ph4metrics.sh
+StandardOutput=append:/var/log/ph4metrics.log
+StandardError=append:/var/log/ph4metrics.log
+# Another alternative for logging is to execute ExecStart as /bin/bash -c ""
+
+RestartSec=5
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

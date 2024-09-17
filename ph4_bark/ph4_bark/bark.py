@@ -164,7 +164,14 @@ class Bark:
                 time.sleep(duration)
 
     def main_loop(self):
-        self.mqtt_client = self.create_mqtt_client()
+        while True:
+            try:
+                self.mqtt_client = self.create_mqtt_client()
+                print("MQTT client connected")
+                break
+            except Exception as e:
+                print(f"Error in MQTT client {e}")
+                time.sleep(60)
 
         audio_queue = Queue(maxsize=self.queue_size)
         capture_thread = Thread(

@@ -1,0 +1,9 @@
+    - name: "Temp Zone 0"
+      state_topic: "metrics/liv"
+      value_template: "{{ value_json.temp_zone0 }}"
+      unit_of_measurement: "C"
+
+    - name: "Temp Zone 1"
+      state_topic: "metrics/liv"
+      value_template: "{{ value_json.temp_zone1 }}"
+      unit_of_measurement: "C"
