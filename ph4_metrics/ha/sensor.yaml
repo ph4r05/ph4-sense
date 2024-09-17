@@ -7,3 +7,13 @@
       state_topic: "metrics/liv"
       value_template: "{{ value_json.temp_zone1 }}"
       unit_of_measurement: "C"
+
+    - name: "Load Avg 1"
+      state_topic: "metrics/liv"
+      value_template: "{{ value_json.load_avg1 }}"
+      unit_of_measurement: "u"
+
+    - name: "Mem Percent"
+      state_topic: "metrics/liv"
+      value_template: "{{ value_json.mem_percent }}"
+      unit_of_measurement: "%"

@@ -4,6 +4,7 @@ import time
 from typing import Optional
 
 import paho.mqtt.client as mqtt  # paho-mqtt
+import psutil
 from attr import dataclass
 
 
@@ -11,6 +12,8 @@ from attr import dataclass
 class Metrics:
     temp_zone0: Optional[float] = None
     temp_zone1: Optional[float] = None
+    load_avg_1: Optional[float] = None
+    mem_percent: Optional[float] = None
 
 
 class Bark:
@@ -44,6 +47,8 @@ class Bark:
             {
                 "temp_zone0": self.metrics.temp_zone0,
                 "temp_zone1": self.metrics.temp_zone1,
+                "load_avg1": self.metrics.load_avg_1,
+                "mem_percent": self.metrics.mem_percent,
             },
         )
 
@@ -58,6 +63,12 @@ class Bark:
         try:
             self.metrics.temp_zone0 = self.read_temp("/sys/class/thermal/thermal_zone0/temp")
             self.metrics.temp_zone1 = self.read_temp("/sys/class/thermal/thermal_zone1/temp")
+
+            load_avg = psutil.getloadavg()
+            self.metrics.load_avg_1 = load_avg[0]
+
+            memory = psutil.virtual_memory()
+            self.metrics.mem_percent = memory.percent
 
         except Exception as e:
             print(f"Error in metrics collection {e}")

@@ -9,6 +9,7 @@ install_requires = [
     "future",
     "coloredlogs",
     "paho-mqtt",
+    "psutil",
 ]
 
 dev_extras = [
