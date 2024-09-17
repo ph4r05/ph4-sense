@@ -57,7 +57,7 @@ class Bark:
             return None
         with open(fname, "r") as f:
             dt = f.read()
-            return float(dt.strip())
+            return float(dt.strip()) / 1000.0
 
     def compute_metrics(self):
         try:
