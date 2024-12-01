@@ -19,6 +19,7 @@ from ph4_sense_base.support.uart_mp import UartMp
 
 # TODO: IMPLEMENT with mods
 # TODO: mod for sensors, sensor set?
+# Unfinished, missing integration with SensorsModMp
 class SenseiMp(SenseiBase):
     def __init__(
         self,

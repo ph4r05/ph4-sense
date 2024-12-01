@@ -1,3 +1,4 @@
+from ph4_sense.mods.sensor_mod import SensorMod
 from ph4_sense_base.adapters import sleep_ms, time
 from ph4_sense_base.mods.sensors import SensorsMod
 from ph4_sense_base.sensei_iface import SenseiIface
@@ -17,14 +18,14 @@ class SensorsModMp(SensorsMod, SenseiIface):
         self.last_tsync = 0
         self.temp_sync_timeout = 180
 
-        self.aht21 = None
-        self.hdc1080 = None
-        self.sgp30 = None
-        self.sgp41 = None
-        self.ccs811 = None
-        self.scd4x = None
-        self.sps30 = None
-        self.zh03b = None
+        self.aht21: Optional[SensorMod] = None
+        self.hdc1080: Optional[SensorMod] = None
+        self.sgp30: Optional[SensorMod] = None
+        self.sgp41: Optional[SensorMod] = None
+        self.ccs811: Optional[SensorMod] = None
+        self.scd4x: Optional[SensorMod] = None
+        self.sps30: Optional[SensorMod] = None
+        self.zh03b: Optional[SensorMod] = None
 
     def log_fnc(self, level, msg, *args, **kwargs):
         return self.base.log_fnc(level, msg, *args, **kwargs)
