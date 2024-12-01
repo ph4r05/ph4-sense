@@ -317,12 +317,10 @@ class Blinds(hass.Hass):
     def on_dusk_recompute(self):
         try:
             # TODO: maybe to dusk + (midnight - dusk) / 2
-            total_offset = datetime.timedelta(
-                hours=self.dusk_offset.hour, minutes=self.dusk_offset.minute
-            ) - datetime.timedelta(hours=12, minutes=0)
+            total_offset = datetime.timedelta(minutes=60 * self.dusk_offset.hour + self.dusk_offset.minute - 12 * 60)
             adjusted_dusk_time = self.next_dusk_time + total_offset
             self.log(
-                f"Scheduling event for dusk at {adjusted_dusk_time} with offset of {total_offset}"
+                f"Scheduling event for dusk at {adjusted_dusk_time}, {total_offset=}"
                 f", {self.dusk_automation_enabled=}, {self.automation_enabled}"
             )
 
@@ -338,8 +336,8 @@ class Blinds(hass.Hass):
     def on_pre_dusk_recompute(self):
         try:
             total_offset = datetime.timedelta(
-                hours=self.pre_dusk_offset.hour, minutes=self.pre_dusk_offset.minute
-            ) - datetime.timedelta(hours=12, minutes=0)
+                minutes=60 * self.pre_dusk_offset.hour + self.pre_dusk_offset.minute - 12 * 60
+            )
             time_diff = (
                 datetime.datetime(
                     year=2000, day=1, month=1, hour=self.next_dusk_time.hour, minute=self.next_dusk_time.minute
@@ -366,8 +364,8 @@ class Blinds(hass.Hass):
     def on_dawn_recompute(self):
         try:
             total_offset = datetime.timedelta(
-                hours=self.pre_dawn_offset.hour, minutes=self.pre_dawn_offset.minute
-            ) - datetime.timedelta(hours=12, minutes=0)
+                minutes=60 * self.pre_dawn_offset.hour + self.pre_dawn_offset.minute - 12 * 60
+            )
             adjusted_pre_dawn_time = self.next_dawn_time + total_offset
             self.log(
                 f"Scheduling event for pre-dawn at {adjusted_pre_dawn_time}, {total_offset=}"
