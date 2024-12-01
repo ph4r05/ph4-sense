@@ -10,7 +10,7 @@ from ph4_sense_base.mods_mp.mqtt import MqttModMp
 from ph4_sense_base.mods_mp.uart import UartModMp
 from ph4_sense_base.mods_mp.wifi import WifiModMp
 from ph4_sense_base.sensei_iface import SenseiIface
-from ph4_sense_base.support.typing import Optional
+from ph4_sense_base.support.typing import Dict, Optional
 from ph4_sense_base.utils import def_val
 
 
@@ -58,11 +58,11 @@ class SenseiBase(SenseiIface):
         assert self.mod_mqtt is not None
         self.mod_mqtt.set_sensor_id(sensor_id)
 
-    def load_config_data(self):
+    def load_config_data(self) -> Dict:
         with open("config.json") as fh:
             return json.load(fh)
 
-    def load_config(self):
+    def load_config(self) -> Dict:
         js = self.load_config_data()
         sensor_id = def_val(js, "sensor_id")
 
@@ -70,6 +70,7 @@ class SenseiBase(SenseiIface):
             self.set_sensor_id(sensor_id)
 
         self.load_mods_config(js)
+        return js
 
     def load_mods_config(self, js):
         if self.mod_mqtt is not None:
