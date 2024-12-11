@@ -4,6 +4,11 @@ from ph4_sense_base.mods.i2c import I2CMod
 from ph4_sense_base.sensei_iface import SenseiIface
 from ph4_sense_base.support.typing import Optional
 
+try:
+    import uasyncio as asyncio
+except ImportError:
+    import asyncio
+
 
 class I2CModMp(I2CMod):
     def __init__(
@@ -14,6 +19,7 @@ class I2CModMp(I2CMod):
         self.sda_pin = sda_pin
         self.base = base
         self.has_i2c = has_i2c
+        self.lock = asyncio.Lock()
 
     def start_bus(self):
         self.i2c = machine.SoftI2C(scl=machine.Pin(self.scl_pin), sda=machine.Pin(self.sda_pin))
