@@ -8,11 +8,6 @@ from ph4_sense_base.sensei_base import SenseiBase
 from ph4_sense_base.support.sensor_helper import SensorHelper
 from ph4_sense_base.support.typing import Optional
 
-try:
-    from typing import List
-except ImportError:
-    pass
-
 
 class MotorController:
     def __init__(self, pin_number, level_pin: Optional[int] = None):
@@ -117,14 +112,9 @@ class Sensei(SenseiBase):
 
     def load_config(self):
         js = super().load_config()
-
-        if "sensors" in js:
-            self.load_config_sensors(js["sensors"])
-
-    def load_config_sensors(self, sensors: List[str]):
-        for sensor in sensors:
-            sensor = sensor.lower()
-            pass
+        # TODO: load pin config
+        if "water" not in js:
+            return
 
     def try_measure(self, fnc):
         for attempt in range(self.measure_attempts):
@@ -186,7 +176,7 @@ class Sensei(SenseiBase):
         while True:
             self.maybe_reconnect_mqtt()
             self.measure_loop_body()
-            await asyncio.sleep(100 * self.measure_loop_ms)
+            await asyncio.sleep(1000 * self.measure_loop_ms)
 
 
 def main():

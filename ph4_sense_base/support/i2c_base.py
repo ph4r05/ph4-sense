@@ -5,6 +5,11 @@ try:
 except ImportError:
     from busio import I2C
 
+try:
+    import uasyncio as asyncio
+except ImportError:
+    import asyncio
+
 
 try:
     from typing import NoReturn
@@ -26,6 +31,12 @@ class BitRegister:
     def read(self) -> bytearray:
         self.i2c_bus.writeto(self.address, self.cmd_buffer)
         sleep_ms(_SLEEP_MS_CONST)
+        self.i2c_bus.readfrom_into(self.address, self.buffer)
+        return self.buffer
+
+    async def aread(self):
+        self.i2c_bus.writeto(self.address, self.cmd_buffer)
+        await asyncio.sleep(1000 * _SLEEP_MS_CONST)
         self.i2c_bus.readfrom_into(self.address, self.buffer)
         return self.buffer
 
