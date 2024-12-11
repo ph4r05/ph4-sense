@@ -119,7 +119,7 @@ class SensorsModMp(SensorsMod, SenseiIface):
                     raise
                 else:
                     self.logger.warn(f"Could not measure sensor {fnc}, attempt {attempt}: {e}")
-                    sleep_ms(self.measure_timeout)
+                    sleep_ms(self.measure_timeout)  # TODO: asyncio
 
     def try_connect_sensor(self, fnc):
         for attempt in range(self.reconnect_attempts):
@@ -131,7 +131,7 @@ class SensorsModMp(SensorsMod, SenseiIface):
                     raise
                 else:
                     self.logger.warn(f"Could not connect sensor {fnc}, attempt {attempt}: {e}")
-                    sleep_ms(self.reconnect_timeout)
+                    sleep_ms(self.reconnect_timeout)  # TODO: asyncio
 
     def connect(self):
         self.base.print("\nConnecting sensors")
