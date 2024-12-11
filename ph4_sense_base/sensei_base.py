@@ -180,6 +180,7 @@ class SenseiBase(SenseiIface):
 
     def base_init(self):
         self.logger = getLogger(__name__)
+        self.init_mods()
 
     def post_start(self):
         self.base_init()
