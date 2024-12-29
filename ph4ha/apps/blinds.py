@@ -4,7 +4,7 @@ from datetime import time
 from enum import Enum, auto
 from typing import Optional
 
-import hassapi as hass
+import appdaemon.plugins.hass.hassapi as hass
 import requests
 
 
@@ -41,12 +41,19 @@ class Blinds(hass.Hass):
         super().__init__(*args, **kwargs)
         self.blinds = None
         self.weekdays_open_time: Optional[datetime.time] = None
+        self.weekends_open_time: Optional[datetime.time] = None
         self.guest_weekdays_open_time: Optional[datetime.time] = None
+        self.guest_weekends_open_time: Optional[datetime.time] = None
         self.guest_mode: bool = False
         self.automation_enabled: bool = True
         self.bedroom_automation_enabled: bool = True
         self.night_venting_enabled: bool = True
         self.close_on_dawn_enabled: bool = True
+        self.dusk_automation_enabled = True
+        self.full_open_automation_enabled = None
+        self.morning_automation_enabled = None
+        self.morning_weekend_automation_enabled = None
+        self.winter_mode: bool = False
         self.next_dawn_time: Optional[datetime.datetime] = None
         self.next_dusk_time: Optional[datetime.datetime] = None
         self.next_noon_time: Optional[datetime.datetime] = None
@@ -56,33 +63,46 @@ class Blinds(hass.Hass):
         self.dusk_offset: datetime.time = datetime.time(hour=12)
         self.pre_dusk_offset: datetime.time = datetime.time(hour=12)
         self.pre_dawn_offset: datetime.time = datetime.time(hour=12)
-        self.dusk_automation_enabled = True
         self.current_state = BlindsState.INITIAL
-        self.full_open_automation_enabled = None
-        self.dusk_timer = None
+        self.morning_adjusted_time = None
+        self.morning_timer = None
         self.pre_dusk_timer = None
+        self.pre_dusk_adjusted_time = None
+        self.dusk_timer = None
+        self.dusk_adjusted_time = None
         self.dawn_timer = None
+        self.dawn_adjusted_time = None
+        self.last_morning_event: Optional[datetime.time] = None
+        self.last_morning_context_event: Optional[datetime.time] = None
 
         self.field_weekdays_open_time = None
+        self.field_weekends_open_time = None
         self.field_guest_mode = None
         self.field_automation_enabled = None
         self.field_guest_weekdays_open_time = None
+        self.field_guest_weekends_open_time = None
         self.field_bedroom_automation_enabled = None
         self.field_dusk_offset = None
         self.field_dusk_automation_enabled = None
         self.field_full_open_automation_enabled = None
         self.field_night_venting_enabled = None
         self.field_close_on_dawn_enabled = None
+        self.field_morning_automation_enabled = None
+        self.field_morning_weekend_automation_enabled = None
         self.field_blinds_pre_dusk_offset = None
-        self.field_weekend_open_time = None
         self.field_sunset_offset_time = None
         self.field_full_open_time = None
         self.field_full_close_time = None
+        self.field_winter_mode = None
+
+        self.holiday_checker = CzechHolidayChecker()
 
     def initialize(self):
         self.blinds = {x["name"]: x for x in self.args["blinds"]}
         self.field_weekdays_open_time = self.args["weekdays_open_time"]
+        self.field_weekends_open_time = "input_datetime.blinds_weekends_open_time"
         self.field_guest_weekdays_open_time = self.args["guest_weekdays_open_time_input"]
+        self.field_guest_weekends_open_time = "input_datetime.blinds_weekends_guest_open_time"
         self.field_guest_mode = self.args["guest_mode_input"]
         self.field_automation_enabled = self.args["automation_enabled_input"]
         self.field_bedroom_automation_enabled = self.args["bedroom_automation_enabled_input"]
@@ -92,15 +112,19 @@ class Blinds(hass.Hass):
         self.field_dusk_automation_enabled = self.args["dusk_automation_enabled_input"]
         self.field_full_open_automation_enabled = self.args["full_open_automation_enabled_input"]
         self.field_blinds_pre_dusk_offset = self.args["blinds_pre_dusk_offset_input"]
+        self.field_morning_automation_enabled = "input_boolean.blinds_morning_automation_enabled"
+        self.field_morning_weekend_automation_enabled = "input_boolean.blinds_morning_weekend_automation_enabled"
+        self.field_winter_mode = "input_boolean.blinds_winter_mode_enabled"
 
-        # self.field_weekend_open_time = self.args["weekend_open_time_input"]
         # self.field_sunset_offset_time = self.args["sunset_offset_time_input"]
         # self.field_full_open_time = self.args["full_open_time_input"]
         # self.field_full_close_time = self.args["full_close_time_input"]
 
         # Set initial blind open time
-        self.update_blind_open_time()
-        self.update_blind_open_time_guest()
+        self.update_weekdays_open_time()
+        self.update_weekends_open_time()
+        self.update_guest_weekdays_open_time_guest()
+        self.update_guest_weekends_open_time_guest()
         self.update_blind_guest_mode()
         self.update_blind_automation_enabled()
         self.update_blind_dusk_automation_enabled()
@@ -110,11 +134,17 @@ class Blinds(hass.Hass):
         self.update_blind_close_on_dawn_enabled()
         self.update_blind_dusk_offset()
         self.update_blind_pre_dusk_offset()
+        self.update_blinds_morning_automation_enabled()
+        self.update_blinds_morning_weekend_automation_enabled()
+        self.update_winter_mode()
         self.update_sun_times()
 
         # Listen for changes to the input_datetime entity
-        self.listen_state(self.update_blind_open_time, self.field_weekdays_open_time)
-        self.listen_state(self.update_blind_open_time_guest, self.field_guest_weekdays_open_time)
+        self.listen_state(self.update_weekdays_open_time, self.field_weekdays_open_time)
+        self.listen_state(self.update_weekends_open_time, self.field_weekends_open_time)
+        self.listen_state(self.update_guest_weekdays_open_time_guest, self.field_guest_weekdays_open_time)
+        self.listen_state(self.update_guest_weekends_open_time_guest, self.field_guest_weekends_open_time)
+
         self.listen_state(self.update_blind_guest_mode, self.field_guest_mode)
         self.listen_state(self.update_blind_automation_enabled, self.field_automation_enabled)
         self.listen_state(self.update_blind_dusk_automation_enabled, self.field_dusk_automation_enabled)
@@ -122,6 +152,11 @@ class Blinds(hass.Hass):
         self.listen_state(self.update_blind_full_open_automation_enabled, self.field_full_open_automation_enabled)
         self.listen_state(self.update_blind_night_venting_enabled, self.field_night_venting_enabled)
         self.listen_state(self.update_blind_close_on_dawn_enabled, self.field_close_on_dawn_enabled)
+        self.listen_state(self.update_blinds_morning_automation_enabled, self.field_morning_automation_enabled)
+        self.listen_state(
+            self.update_blinds_morning_weekend_automation_enabled, self.field_morning_weekend_automation_enabled
+        )
+        self.listen_state(self.update_winter_mode, self.field_winter_mode)
         self.listen_state(self.update_blind_dusk_offset, self.field_dusk_offset)
         self.listen_state(self.update_blind_pre_dusk_offset, self.field_blinds_pre_dusk_offset)
 
@@ -153,7 +188,7 @@ class Blinds(hass.Hass):
             f"initialized, {self.weekdays_open_time=}, {self.guest_mode=}, now: {datetime.datetime.now()}"
             f", {self.full_open_automation_enabled=}, {self.dusk_automation_enabled=}"
             f", {self.bedroom_automation_enabled=}, {self.automation_enabled=}"
-            f", {self.dusk_offset=}, {self.pre_dusk_offset=}"
+            f", {self.dusk_offset=}, {self.pre_dusk_offset=}, {self.winter_mode=}"
         )
 
     def transition_function(self):
@@ -221,39 +256,69 @@ class Blinds(hass.Hass):
             self.log(f"{self.next_dawn_time=}")
             self.log(f"{self.next_sunrise_time=}")
             self.log(f"{self.next_sunset_time=}")
-            self.on_dusk_recompute()
-            self.on_pre_dusk_recompute()
-            self.on_dawn_recompute()
+            self.on_sun_recompute()
         except Exception as e:
             self.log(f"Failed to retrieve dusk time state: {e}, {dusk_time_str=}")
 
-    def update_blind_open_time(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
-        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
-        weekday_blind_open_time = self.get_state(self.field_weekdays_open_time)
+    def on_sun_recompute(self):
+        self.on_morning_recompute()
+        self.on_pre_dusk_recompute()
+        self.on_dusk_recompute()
+        self.on_dawn_recompute()
 
-        if weekday_blind_open_time is None:
+    def get_time_attribute(self, field: str) -> Optional[datetime.time]:
+        try:
+            val = self.get_state(field)
+            return self.parse_time(val) if val is not None else None
+        except Exception as e:
+            self.log(f"Error parsing time attribute {field}, e: {e}")
+        return None
+
+    def update_weekdays_open_time(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
+        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        parsed_time = self.get_time_attribute(self.field_weekdays_open_time)
+        if parsed_time is None:
             self.log("Failed to retrieve weekday_blind_open_time state.")
-        else:
-            self.log(f"Weekday Blind Open Time updated: {weekday_blind_open_time}")
+            return
 
-            self.weekdays_open_time = self.parse_time(weekday_blind_open_time)
-            self.log(f"{self.weekdays_open_time=}")
+        self.weekdays_open_time = parsed_time
+        self.log(f"{self.weekdays_open_time=}")
+        self.on_morning_recompute()
 
-            # Cancel any previously scheduled runs to avoid duplication
-            # self.cancel_timers()
-
-            # Schedule the blind open event at the new time
-            # self.run_daily(self.open_blinds, self.weekdays_open_time)
-
-    def update_blind_open_time_guest(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
+    def update_weekends_open_time(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
         self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
-        open_time = self.get_state(self.field_guest_weekdays_open_time)
+        parsed_time = self.get_time_attribute(self.field_weekends_open_time)
+        if parsed_time is None:
+            self.log("Failed to retrieve weekday_blind_open_time state.")
+            return
+
+        self.weekends_open_time = parsed_time
+        self.log(f"{self.weekdays_open_time=}")
+        self.on_morning_recompute()
+
+    def update_guest_weekdays_open_time_guest(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
+        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        open_time = self.get_time_attribute(self.field_guest_weekdays_open_time)
 
         if open_time is None:
             self.log(f"Failed to retrieve {self.field_guest_weekdays_open_time} state.")
-        else:
-            self.guest_weekdays_open_time = self.parse_time(open_time)
-            self.log(f"{self.guest_weekdays_open_time=}")
+            return
+
+        self.guest_weekdays_open_time = open_time
+        self.log(f"{self.guest_weekdays_open_time=}")
+        self.on_morning_recompute()
+
+    def update_guest_weekends_open_time_guest(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
+        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        open_time = self.get_time_attribute(self.field_guest_weekends_open_time)
+
+        if open_time is None:
+            self.log(f"Failed to retrieve {self.field_guest_weekends_open_time} state.")
+            return
+
+        self.guest_weekends_open_time = open_time
+        self.log(f"{self.guest_weekends_open_time=}")
+        self.on_morning_recompute()
 
     def update_blind_guest_mode(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
         self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
@@ -302,6 +367,20 @@ class Blinds(hass.Hass):
         self.full_open_automation_enabled = self.to_bool(self.get_state(self.field_full_open_automation_enabled))
         self.log(f"{self.full_open_automation_enabled=}")
 
+    def update_blinds_morning_automation_enabled(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
+        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        self.morning_automation_enabled = self.to_bool(self.get_state(self.field_morning_automation_enabled))
+        self.log(f"{self.morning_automation_enabled=}")
+
+    def update_blinds_morning_weekend_automation_enabled(
+        self, entity=None, attribute=None, old=None, new=None, kwargs=None
+    ):
+        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        self.morning_weekend_automation_enabled = self.to_bool(
+            self.get_state(self.field_morning_weekend_automation_enabled)
+        )
+        self.log(f"{self.morning_weekend_automation_enabled=}")
+
     def update_blind_pre_dusk_offset(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
         self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
         value = self.get_state(self.field_blinds_pre_dusk_offset)
@@ -314,68 +393,144 @@ class Blinds(hass.Hass):
         self.log(f"{self.pre_dusk_offset=}")
         self.on_pre_dusk_recompute()
 
+    def update_winter_mode(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
+        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        self.winter_mode = self.to_bool(self.get_state(self.field_winter_mode))
+        self.log(f"{self.winter_mode=}")
+        self.on_sun_recompute()
+
+    def on_morning_recompute(self):
+        """Automation for mornings"""
+        # TODO: implement, weekend mode, guest mode, away mode
+        try:
+            # Scheduling can happen in any time, it is needed to determine if the scheduling is for today or tomorrow.
+            # by the given day it is needed to determine if it is holiday or not and use corresponding open times
+            now = datetime.datetime.now()
+            tomorrow = datetime.datetime.now() + datetime.timedelta(days=1)
+            is_holiday = [  # today, tomorrow
+                self.holiday_checker.is_weekend_or_holiday(now),
+                self.holiday_checker.is_weekend_or_holiday(tomorrow),
+            ]
+
+            open_times_all = [  # today, tomorrow
+                self.weekends_open_time if is_holiday[0] else self.weekdays_open_time,
+                self.weekends_open_time if is_holiday[1] else self.weekdays_open_time,
+            ]
+
+            # open_times_guest = (
+            #     [  # today, tomorrow
+            #         self.guest_weekends_open_time if is_holiday[0] else self.guest_weekdays_open_time,
+            #         self.guest_weekends_open_time if is_holiday[1] else self.guest_weekdays_open_time,
+            #     ]
+            #     if self.guest_mode
+            #     else open_times_all
+            # )
+
+            open_datetimes_all = [  # today, tomorrow
+                self.get_datetimes(open_times_all[0]),
+                self.get_datetimes(open_times_all[1], tomorrow),
+            ]
+
+            # open_datetimes_guest = [  # today, tomorrow
+            #     self.get_datetimes(open_times_guest[0]),
+            #     self.get_datetimes(open_times_guest[1], tomorrow),
+            # ]
+
+            plan_all_idx = int(open_datetimes_all[0] < now)
+            # plan_guest_idx = int(open_datetimes_all[0] < now)
+
+            adjusted_time = open_datetimes_all[plan_all_idx]
+            self.log(
+                f"Scheduling event for morning at {plan_all_idx=}, {adjusted_time=}, {self.morning_automation_enabled=},"
+                f" {self.automation_enabled=}"
+            )
+
+            if self.morning_timer is not None:
+                self.try_cancel_timer(self.morning_timer)
+                self.log("Previous morning timer canceled.")
+
+            self.morning_adjusted_time = adjusted_time
+            self.morning_timer = self.run_at(self.blinds_morning_context_automated, adjusted_time)
+            # self.set_state("input_datetime.blinds_morning_final", state=self.fmt_datetime(adjusted_time))
+        except Exception as e:
+            self.log(f"Error in morning recomputation: {e}")
+
+    def compute_evening_mode_dusk_timer(self):
+        # TODO: maybe (dusk + (midnight - dusk) / 2) in summer
+        target_time = self.next_sunset_time if self.winter_mode else self.next_dusk_time
+        total_offset = self.get_timedelta_offset(self.dusk_offset)
+        adjusted_dusk_time = target_time + total_offset
+        return adjusted_dusk_time, total_offset
+
     def on_dusk_recompute(self):
         try:
-            # TODO: maybe to dusk + (midnight - dusk) / 2
-            total_offset = datetime.timedelta(minutes=60 * self.dusk_offset.hour + self.dusk_offset.minute - 12 * 60)
-            adjusted_dusk_time = self.next_dusk_time + total_offset
+            adjusted_dusk_time, total_offset = self.compute_evening_mode_dusk_timer()
             self.log(
                 f"Scheduling event for dusk at {adjusted_dusk_time}, {total_offset=}"
                 f", {self.dusk_automation_enabled=}, {self.automation_enabled}"
             )
 
             if self.dusk_timer is not None:
-                self.cancel_timer(self.dusk_timer)
+                self.try_cancel_timer(self.dusk_timer)
                 self.log("Previous dusk timer canceled.")
 
+            self.dusk_adjusted_time = adjusted_dusk_time
             self.dusk_timer = self.run_at(self.blinds_on_dusk_event, adjusted_dusk_time)
             self.set_state("input_datetime.blinds_dusk_final", state=self.fmt_datetime(adjusted_dusk_time))
         except Exception as e:
             self.log(f"Error in dusk recomputation: {e}")
 
-    def on_pre_dusk_recompute(self):
-        try:
-            total_offset = datetime.timedelta(
-                minutes=60 * self.pre_dusk_offset.hour + self.pre_dusk_offset.minute - 12 * 60
+    def compute_noon_full_open_theme_pre_dusk_timer(self):
+        target_time = self.next_sunset_time if self.winter_mode else self.next_dusk_time
+        total_offset = self.get_timedelta_offset(self.pre_dusk_offset)
+        time_diff = (
+            datetime.datetime(year=2000, day=1, month=1, hour=target_time.hour, minute=target_time.minute)
+            - datetime.datetime(
+                year=2000, day=1, month=1, hour=self.next_noon_time.hour, minute=self.next_noon_time.minute
             )
-            time_diff = (
-                datetime.datetime(
-                    year=2000, day=1, month=1, hour=self.next_dusk_time.hour, minute=self.next_dusk_time.minute
-                )
-                - datetime.datetime(
-                    year=2000, day=1, month=1, hour=self.next_noon_time.hour, minute=self.next_noon_time.minute
-                )
-            ) / 2
-            adjusted_pre_dusk_time = self.next_noon_time + time_diff + total_offset
+        ) / 2
+
+        adjusted_pre_dusk_time = target_time - time_diff + total_offset
+        return adjusted_pre_dusk_time, time_diff, total_offset
+
+    def on_pre_dusk_recompute(self):
+        """Pre-dusk theme to full open blinds to maximize natural light"""
+        try:
+            adjusted_pre_dusk_time, time_diff, total_offset = self.compute_noon_full_open_theme_pre_dusk_timer()
             self.log(
                 f"Scheduling event for pre-dusk at {adjusted_pre_dusk_time}, {total_offset=}, {time_diff=}"
                 f", {self.full_open_automation_enabled=}, {self.automation_enabled=}"
             )
 
             if self.pre_dusk_timer is not None:
-                self.cancel_timer(self.pre_dusk_timer)
+                self.try_cancel_timer(self.pre_dusk_timer)
                 self.log("Previous pre-dusk timer canceled.")
 
+            self.pre_dusk_adjusted_time = adjusted_pre_dusk_time
             self.pre_dusk_timer = self.run_at(self.blinds_on_pre_dusk_event, adjusted_pre_dusk_time)
             self.set_state("input_datetime.blinds_pre_dusk_final", state=self.fmt_datetime(adjusted_pre_dusk_time))
         except Exception as e:
             self.log(f"Error in pre-dusk recomputation: {e}")
 
+    def compute_adjusted_pre_dawn_time(self):
+        total_offset = self.get_timedelta_offset(self.pre_dawn_offset)
+        adjusted_pre_dawn_time = self.next_dawn_time + total_offset
+        return adjusted_pre_dawn_time, total_offset
+
     def on_dawn_recompute(self):
+        """Full close to prevent morning light from waking people up"""
         try:
-            total_offset = datetime.timedelta(
-                minutes=60 * self.pre_dawn_offset.hour + self.pre_dawn_offset.minute - 12 * 60
-            )
-            adjusted_pre_dawn_time = self.next_dawn_time + total_offset
+            adjusted_pre_dawn_time, total_offset = self.compute_adjusted_pre_dawn_time()
             self.log(
-                f"Scheduling event for pre-dawn at {adjusted_pre_dawn_time}, {total_offset=}"
+                f"Scheduling event for pre-dawn at {adjusted_pre_dawn_time},"
                 f", {self.full_open_automation_enabled=}, {self.automation_enabled=}"
             )
 
             if self.dawn_timer is not None:
-                self.cancel_timer(self.dawn_timer)
+                self.try_cancel_timer(self.dawn_timer)
                 self.log("Previous dawn_timer timer canceled.")
 
+            self.dawn_adjusted_time = adjusted_pre_dawn_time
             self.dawn_timer = self.run_at(self.blinds_on_pre_dawn_event, adjusted_pre_dawn_time)
         except Exception as e:
             self.log(f"Error in pre-dusk recomputation: {e}")
@@ -513,6 +668,7 @@ class Blinds(hass.Hass):
         self.blinds_pos_tilt(self.BLIND_STUDY, 0, self.OPEN_HALF)
 
     def blinds_morning(self):
+        self.last_morning_event = datetime.datetime.now()
         self.blinds_living_morning()
         self.blinds_pos_tilt(self.BLIND_LIV_DOOR, 100, 0)
         self.blinds_pos_tilt(self.BLIND_BEDROOM, 100, 0)
@@ -525,6 +681,7 @@ class Blinds(hass.Hass):
             self.log("Automation disabled")
             return
 
+        self.last_morning_context_event = datetime.datetime.now()
         self.blinds_living_morning()
         self.blinds_pos_tilt(self.BLIND_LIV_DOOR, 100, 0)
         self.blinds_pos_tilt(self.BLIND_STUDY, 0, self.OPEN_HALF)
@@ -535,6 +692,13 @@ class Blinds(hass.Hass):
         if self.bedroom_automation_enabled:
             self.blinds_pos_tilt(self.BLIND_BEDROOM, 100, 0)
 
+    def blinds_morning_context_automated(self):
+        if not self.morning_automation_enabled:
+            self.log("Morning automation disabled")
+            return
+
+        return self.blinds_morning_context()
+
     def blinds_on_dusk_event(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
         if not self.dusk_automation_enabled or not self.automation_enabled:
             self.log(f"Dusk automation disabled, {self.dusk_automation_enabled=}, {self.automation_enabled=}")
@@ -542,6 +706,8 @@ class Blinds(hass.Hass):
         self.blinds_living_down_privacy()
         self.blinds_pos_tilt(self.BLIND_SKLAD, 0, self.OPEN_PRIVACY)
         self.blinds_pos_tilt(self.BLIND_STUDY, 0, self.OPEN_PRIVACY)
+        if self.winter_mode:
+            self.blinds_pos_tilt(self.BLIND_BEDROOM, 0, self.OPEN_PRIVACY)
 
     def blinds_on_pre_dusk_event(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
         if not self.full_open_automation_enabled or not self.automation_enabled:
@@ -583,3 +749,83 @@ class Blinds(hass.Hass):
 
     def fmt_datetime(self, dtime):
         return dtime.strftime("%Y-%m-%d %H:%M:%S")
+
+    def get_timedelta_offset(self, offset: datetime.time) -> datetime.timedelta:
+        """Computes timedelta from a datetime.time, centered around 12:00, i.e., 13:00 -> +1h, 11:00 -> -1h"""
+        return datetime.timedelta(minutes=60 * offset.hour + offset.minute - 12 * 60)
+
+    def get_datetimes(self, inp: datetime.time, now: Optional[datetime.datetime] = None) -> datetime.datetime:
+        now = now or datetime.datetime.now()
+        return datetime.datetime(year=now.year, month=now.month, day=now.day, hour=inp.hour, minute=inp.minute)
+
+    def try_cancel_timer(self, timer):
+        try:
+            self.cancel_timer(timer)
+        except Exception as e:
+            self.log(f"Try cancel timer failed: {timer=}, {e=}")
+
+
+def try_fnc(x, msg=None):
+    try:
+        return x()
+    except Exception as e:
+        print(f'Err {msg or ""}: {e}')
+
+
+class CzechHolidayChecker:
+    def __init__(self):
+        # Define fixed-date public holidays in the Czech Republic
+        self.fixed_holidays = {
+            (1, 1),  # New Year's Day / Restoration Day of the Independent Czech State
+            (5, 1),  # Labour Day
+            (5, 8),  # Liberation Day
+            (7, 5),  # Saints Cyril and Methodius Day
+            (7, 6),  # Jan Hus Day
+            (9, 28),  # Czech Statehood Day
+            (10, 28),  # Independent Czechoslovak State Day
+            (11, 17),  # Struggle for Freedom and Democracy Day
+            (12, 24),  # Christmas Eve
+            (12, 25),  # Christmas Day
+            (12, 26),  # St. Stephen's Day
+        }
+
+    def is_weekend(self, date: datetime.date) -> bool:
+        """Check if the date is a Saturday (5) or Sunday (6)."""
+        return date.weekday() >= 5
+
+    def is_fixed_holiday(self, date: datetime.date) -> bool:
+        """Check if the date is a fixed-date public holiday."""
+        return (date.month, date.day) in self.fixed_holidays
+
+    def calculate_easter(self, year: int) -> datetime.date:
+        """
+        Calculate the date of Easter Sunday for a given year using the Anonymous Gregorian algorithm.
+        """
+        a = year % 19
+        b = year // 100
+        c = year % 100
+        d = b // 4
+        e = b % 4
+        f = (b + 8) // 25
+        g = (b - f + 1) // 3
+        h = (19 * a + b - d - g + 15) % 30
+        i = c // 4
+        k = c % 4
+        holl = (32 + 2 * e + 2 * i - h - k) % 7
+        m = (a + 11 * h + 22 * holl) // 451
+        month = (h + holl - 7 * m + 114) // 31
+        day = ((h + holl - 7 * m + 114) % 31) + 1
+        return datetime.date(year, month, day)
+
+    def is_easter_related_holiday(self, date: datetime.date) -> bool:
+        """Check if the date is Good Friday or Easter Monday."""
+        easter_sunday = self.calculate_easter(date.year)
+        good_friday = easter_sunday - datetime.timedelta(days=2)
+        easter_monday = easter_sunday + datetime.timedelta(days=1)
+        return date in {good_friday, easter_monday}
+
+    def is_weekend_or_holiday(self, date: datetime.date) -> bool:
+        """
+        Check if a given date is a weekend or a public holiday in the Czech Republic.
+        """
+        return self.is_weekend(date) or self.is_fixed_holiday(date) or self.is_easter_related_holiday(date)

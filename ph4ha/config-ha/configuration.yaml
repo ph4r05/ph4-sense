@@ -28,6 +28,15 @@ input_boolean:
   blinds_close_on_dawn_enabled:
     name: "Blinds Close on Dawn enabled"
     initial: true
+  blinds_winter_mode_enabled:
+    name: "Blinds Winter Mode enabled"
+    initial: false
+  blinds_morning_automation_enabled:
+    name: "Morning automation enabled"
+    initial: false
+  blinds_morning_weekend_automation_enabled:
+    name: "Morning weekend automation enabled"
+    initial: false
 
 input_datetime:
   blinds_weekday_open_time:
@@ -36,6 +45,14 @@ input_datetime:
     has_time: true
   blinds_weekday_guest_open_time:
     name: Blinds Guest Weekday Open Time
+    has_date: false
+    has_time: true
+  blinds_weekends_open_time:
+    name: Blinds Weekends Open Time
+    has_date: false
+    has_time: true
+  blinds_weekends_guest_open_time:
+    name: Blinds Guest Weekends Open Time
     has_date: false
     has_time: true
   blinds_dusk_offset:
