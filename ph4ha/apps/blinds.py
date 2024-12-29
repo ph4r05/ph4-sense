@@ -24,7 +24,6 @@ class Blinds(hass.Hass):
     TODO: collect manual state changes. manual state change cancels the next routine
     TODO: add pause automation toggle
     TODO: add sync - sets state appropriate for this time of a day
-    TODO: is weekend? disable morning automation till 11:30, but how to detect if it was triggered already?
     TODO: add new webhook to listen for all manual blinds movements. collect it
     """
 
@@ -697,6 +696,14 @@ class Blinds(hass.Hass):
             self.log("Morning automation disabled")
             return
 
+        if self.happened_already(self.last_morning_context_event):
+            self.log("Morning context already happened")
+            return
+
+        if self.happened_already(self.last_morning_event):
+            self.log("Morning already happened")
+            return
+
         return self.blinds_morning_context()
 
     def blinds_on_dusk_event(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
@@ -763,6 +770,9 @@ class Blinds(hass.Hass):
             self.cancel_timer(timer)
         except Exception as e:
             self.log(f"Try cancel timer failed: {timer=}, {e=}")
+
+    def happened_already(self, event_time: Optional[datetime.datetime]) -> bool:
+        return event_time < datetime.datetime.now() if event_time else False
 
 
 def try_fnc(x, msg=None):
