@@ -3,6 +3,29 @@ input_text:
     name: "Hallway switch state"
     initial: "off"
 
+input_number:
+  blinds_living_position:
+    name: "Blinds Living room position"
+    initial: 35
+    step: 1
+    mode: box
+    min: 0
+    max: 100
+  blinds_living_tilt:
+    name: "Blinds Living room tilt"
+    initial: 0.9
+    step: 0.1
+    mode: box
+    min: 0
+    max: 3
+  blinds_tilt:
+    name: "Blinds tilt"
+    initial: 0.9
+    step: 0.1
+    mode: box
+    min: 0
+    max: 3
+
 input_boolean:
   hallway_switch_updated_by_webhook:
     name: "Hallway Updated by Webhook"

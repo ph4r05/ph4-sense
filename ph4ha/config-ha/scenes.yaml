@@ -13,6 +13,11 @@
   entities: { }
   icon: mdi:blinds
   metadata: { }
+- id: 'scene-blinds-living-morning-tilt'
+  name: Blinds Living Morning Tilt
+  entities: { }
+  icon: mdi:blinds
+  metadata: { }
 - id: 'scene-blinds-living-privacy'
   name: Blinds Living Privacy
   entities: { }

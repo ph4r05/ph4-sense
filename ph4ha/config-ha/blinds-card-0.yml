@@ -1,0 +1,87 @@
+type: entities
+entities:
+  - input_boolean.blinds_automation_enabled
+  - input_boolean.blinds_guest_mode
+  - input_boolean.blinds_bedroom_automation_enabled
+  - input_boolean.blinds_dusk_automation_enabled
+  - input_boolean.blinds_full_open_automation_enabled
+  - input_boolean.blinds_night_venting_enabled
+  - input_boolean.blinds_close_on_dawn_enabled
+  - input_boolean.blinds_morning_automation_enabled
+  - input_boolean.blinds_morning_weekend_automation_enabled
+  - input_boolean.blinds_winter_mode_enabled
+  - input_datetime.blinds_weekday_guest_open_time
+  - input_datetime.blinds_weekday_open_time
+  - input_datetime.blinds_weekends_guest_open_time
+  - input_datetime.blinds_weekends_open_time
+  - input_datetime.blinds_dusk_offset
+  - input_datetime.blinds_pre_dusk_offset
+  - input_datetime.blinds_pre_dusk_final
+  - input_datetime.blinds_dusk_final
+  - input_number.blinds_living_position
+  - input_number.blinds_living_tilt
+  - input_number.blinds_tilt
+  - automation.button_1_short_click_activate_blinds_vent_scene
+  - entity: scene.blinds_all_down
+    show_icon: true
+    show_name: true
+  - entity: scene.blinds_all_down_open
+    show_icon: true
+    show_name: true
+  - entity: scene.blinds_all_up
+    show_icon: true
+    show_name: true
+  - entity: scene.blinds_down_open
+    show_icon: true
+    show_name: true
+  - entity: scene.blinds_living_down_close
+    show_icon: true
+    show_name: true
+  - entity: scene.blinds_living_down_open
+    show_icon: true
+    show_name: true
+  - entity: scene.blinds_living_down_privacy
+    show_icon: true
+    show_name: true
+  - entity: scene.blinds_living_morning
+    show_icon: true
+    show_name: true
+  - entity: scene.blinds_living_morning_hot
+    show_icon: true
+    show_name: true
+  - entity: scene.blinds_living_morning_tilt
+    show_icon: true
+    show_name: true
+  - entity: scene.blinds_living_privacy
+    show_icon: true
+    show_name: true
+  - entity: scene.blinds_morning
+    show_icon: true
+    show_name: true
+  - entity: scene.blinds_morning_context
+    show_icon: true
+    show_name: true
+  - entity: scene.blinds_tilt_close
+    show_icon: true
+    show_name: true
+  - entity: scene.blinds_tilt_open
+    show_icon: true
+    show_name: true
+  - entity: scene.blinds_vent
+    show_icon: true
+    show_name: true
+  - entity: scene.blinds_vent_bedroom
+    show_icon: true
+    show_name: true
+  - entity: scene.blinds_vent_livbig
+    show_icon: true
+    show_name: true
+  - entity: scene.blinds_vent_livingroom
+    show_icon: true
+    show_name: true
+  - entity: scene.blinds_vent_sklad
+    show_icon: true
+    show_name: true
+  - entity: scene.blinds_vent_study
+    show_icon: true
+    show_name: true

@@ -53,6 +53,10 @@ class Blinds(hass.Hass):
         self.morning_automation_enabled = None
         self.morning_weekend_automation_enabled = None
         self.winter_mode: bool = False
+        self.living_position: int = 35
+        self.living_tilt: float = 0.2
+        self.tilt: float = 0.9
+
         self.next_dawn_time: Optional[datetime.datetime] = None
         self.next_dusk_time: Optional[datetime.datetime] = None
         self.next_noon_time: Optional[datetime.datetime] = None
@@ -93,6 +97,9 @@ class Blinds(hass.Hass):
         self.field_full_open_time = None
         self.field_full_close_time = None
         self.field_winter_mode = None
+        self.field_living_position = None
+        self.field_living_tilt = None
+        self.field_tilt = None
 
         self.holiday_checker = CzechHolidayChecker()
 
@@ -114,6 +121,9 @@ class Blinds(hass.Hass):
         self.field_morning_automation_enabled = "input_boolean.blinds_morning_automation_enabled"
         self.field_morning_weekend_automation_enabled = "input_boolean.blinds_morning_weekend_automation_enabled"
         self.field_winter_mode = "input_boolean.blinds_winter_mode_enabled"
+        self.field_living_position = "input_number.blinds_living_position"
+        self.field_living_tilt = "input_number.blinds_living_tilt"
+        self.field_tilt = "input_number.blinds_tilt"
 
         # self.field_sunset_offset_time = self.args["sunset_offset_time_input"]
         # self.field_full_open_time = self.args["full_open_time_input"]
@@ -136,6 +146,9 @@ class Blinds(hass.Hass):
         self.update_blinds_morning_automation_enabled()
         self.update_blinds_morning_weekend_automation_enabled()
         self.update_winter_mode()
+        self.update_living_position()
+        self.update_living_tilt()
+        self.update_tilt()
         self.update_sun_times()
 
         # Listen for changes to the input_datetime entity
@@ -156,6 +169,9 @@ class Blinds(hass.Hass):
             self.update_blinds_morning_weekend_automation_enabled, self.field_morning_weekend_automation_enabled
         )
         self.listen_state(self.update_winter_mode, self.field_winter_mode)
+        self.listen_state(self.update_living_position, self.field_living_position)
+        self.listen_state(self.update_living_tilt, self.field_living_tilt)
+        self.listen_state(self.update_tilt, self.field_tilt)
         self.listen_state(self.update_blind_dusk_offset, self.field_dusk_offset)
         self.listen_state(self.update_blind_pre_dusk_offset, self.field_blinds_pre_dusk_offset)
 
@@ -398,6 +414,27 @@ class Blinds(hass.Hass):
         self.log(f"{self.winter_mode=}")
         self.on_sun_recompute()
 
+    def update_living_position(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
+        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        tmp_pos = try_fnc(lambda: self.get_state(self.field_living_position))
+        if tmp_pos is not None:
+            self.living_position = tmp_pos
+        self.log(f"{self.living_position=}")
+
+    def update_living_tilt(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
+        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        tmp_pos = try_fnc(lambda: self.get_state(self.field_living_tilt))
+        if tmp_pos is not None:
+            self.living_tilt = tmp_pos
+        self.log(f"{self.living_tilt=}")
+
+    def update_tilt(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
+        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        tmp = try_fnc(lambda: self.get_state(self.field_tilt))
+        if tmp is not None:
+            self.tilt = tmp
+        self.log(f"{self.tilt=}")
+
     def on_morning_recompute(self):
         """Automation for mornings"""
         # TODO: implement, weekend mode, guest mode, away mode
@@ -554,6 +591,8 @@ class Blinds(hass.Hass):
             self.blinds_living_morning()
         elif scene_id == "scene.blinds_living_morning_hot":
             self.blinds_living_morning_hot()
+        elif scene_id == "scene.blinds_living_morning_tilt":
+            self.blinds_living_morning_tilt()
         elif scene_id == "scene.blinds_living_privacy":
             self.blinds_living_privacy()
         elif scene_id == "scene.blinds_all_up":
@@ -608,10 +647,13 @@ class Blinds(hass.Hass):
         self.blinds_pos_tilt(self.BLIND_LIV_DOOR, 0, self.OPEN_HALF)
 
     def blinds_living_morning(self):
-        self.blinds_pos_tilt(self.BLIND_LIV_BIG, 35, self.OPEN_HALF)
+        self.blinds_pos_tilt(self.BLIND_LIV_BIG, self.living_position, self.OPEN_HALF)
 
     def blinds_living_morning_hot(self):
-        self.blinds_pos_tilt(self.BLIND_LIV_BIG, 35, 0.2)
+        self.blinds_pos_tilt(self.BLIND_LIV_BIG, self.living_position, 0.2)
+
+    def blinds_living_morning_tilt(self):
+        self.blinds_pos_tilt(self.BLIND_LIV_BIG, self.living_position, self.living_tilt)
 
     def blinds_living_privacy(self):
         self.blinds_pos_tilt(self.BLIND_LIV_BIG, 30, 0.1)
