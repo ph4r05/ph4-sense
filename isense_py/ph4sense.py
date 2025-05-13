@@ -1,4 +1,4 @@
-#!/usr/local/bin/python3.10
+#!/usr/local/bin/python3.13
 # -*- coding: utf-8 -*-
 
 import logging

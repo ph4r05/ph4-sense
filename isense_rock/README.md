@@ -18,5 +18,5 @@ while true; do nc -ul 9992; done
 ## `import board` problem
 
 - https://forum.radxa.com/t/problem-using-adafruit-blinka-on-rock-4c/16802
-- /usr/local/lib/python3.10/site-packages/adafruit_blinka/microcontroller/rockchip/rk3399/pin.py change back to:
+- /usr/local/lib/python3.13/site-packages/adafruit_blinka/microcontroller/rockchip/rk3399/pin.py change back to:
 - https://github.com/adafruit/Adafruit_Blinka/pull/677/files
