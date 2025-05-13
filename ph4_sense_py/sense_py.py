@@ -82,7 +82,7 @@ class SenseiPy(Sensei):
         pass  # Not used for now
 
     def create_mqtt_client(self):
-        client = mqtt.Client(f"esp32_client/{self.mqtt_sensor_id}")
+        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, f"esp32_client/{self.mqtt_sensor_id}")
         client.on_message = self.mqtt_callback
         client.connect(self.mqtt_broker, self.mqtt_port, keepalive=60)
         client.subscribe(self.mqtt_topic_sub)

@@ -24,6 +24,7 @@ install_requires = [
     "pyftdi",
     "pyserial",
     "ph4-monitlib>=0.0.5",
+    "lgpio",
 ]
 
 dev_extras = [

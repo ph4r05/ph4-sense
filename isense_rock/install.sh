@@ -5,6 +5,7 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 sudo groupadd ph4sense
 sudo useradd -r -M -g ph4sense -s /usr/sbin/nologin -c "System User for ph4sense" ph4sense
 sudo usermod -aG i2c ph4sense
+sudo usermod -aG gpio ph4sense
 sudo usermod -aG dialout ph4sense
 
 set -ex
@@ -22,6 +23,9 @@ chmod 0755 "${MDIR}/ph4sense.sh"
 cp ph4sense.py /usr/local/bin/ph4-sensei-loc
 chmod 0755 "/usr/local/bin/ph4-sensei-loc"
 chown ph4sense:ph4sense "/usr/local/bin/ph4-sensei-loc"
+
+rsync -av "${SCRIPT_DIR}/logrotate/" /etc/logrotate.d/
+sudo apt install -y build-essential git swig liblgpio-dev
 
 touch /var/log/ph4sense.json
 touch /var/log/ph4sense.log
@@ -41,4 +45,4 @@ sudo udevadm trigger
 systemctl enable ph4sense.service
 
 # systemctl restart ph4sense.service
-# pip install -U . && systemctl restart ph4sense.service
+# pip3.13 install -U . && systemctl restart ph4sense.service
