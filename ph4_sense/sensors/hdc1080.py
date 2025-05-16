@@ -8,13 +8,13 @@ _HDC1080_IMPORTED = False
 HDC1080 = Any
 
 # Machine-dependent import
-# if not _HDC1080_IMPORTED:
-#     try:
-#         from ph4_sense_py.sensors.hdc1080_ada import HDC1080
-#
-#         _HDC1080_IMPORTED = True
-#     except ImportError:
-#         pass
+if not _HDC1080_IMPORTED:
+    try:
+        from ph4_sense_py.sensors.hdc1080_ada import HDC1080
+
+        _HDC1080_IMPORTED = True
+    except ImportError:
+        pass
 
 if not _HDC1080_IMPORTED:
     assert HDC1080 is Any

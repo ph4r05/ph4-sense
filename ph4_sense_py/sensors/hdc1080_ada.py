@@ -93,7 +93,7 @@ class HDC1080:
     _temperature_resolution = i2c_bit.RWBit(_CONFIG, 10, 2, False)
     _humidity_resolution = i2c_bits.RWBits(2, _CONFIG, 8, 2, False)
 
-    def __init__(self, i2c: I2C, address: int = 0x40) -> None:
+    def __init__(self, i2c: I2C, address: int = 0x40, **kwargs) -> None:
         self.i2c_device = I2CDevice(i2c, address)
         dev_id = self._device_id
         if dev_id != 0x1050:
