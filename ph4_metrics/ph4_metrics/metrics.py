@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 import time
 from typing import Optional
 
@@ -12,16 +13,18 @@ from attr import dataclass
 class Metrics:
     temp_zone0: Optional[float] = None
     temp_zone1: Optional[float] = None
+    temp_ssd: Optional[float] = None
     load_avg_1: Optional[float] = None
     mem_percent: Optional[float] = None
 
 
-class Bark:
+class MetricsCollector:
     def __init__(self):
         self.mqtt_client = None
         self.mqtt_broker = "localhost"
         self.mqtt_port = 1883
-        self.mqtt_topic_sub = "bark"
+        self.mqtt_topic_sub = "metrics/liv"
+        self.err_ssd_shown = False
         self.metrics = Metrics()
 
     def create_mqtt_client(self):
@@ -47,6 +50,7 @@ class Bark:
             {
                 "temp_zone0": self.metrics.temp_zone0,
                 "temp_zone1": self.metrics.temp_zone1,
+                "temp_ssd": self.metrics.temp_ssd,
                 "load_avg1": self.metrics.load_avg_1,
                 "mem_percent": self.metrics.mem_percent,
             },
@@ -59,10 +63,33 @@ class Bark:
             dt = f.read()
             return float(dt.strip()) / 1000.0
 
+    def read_ssd_temp(self):
+        try:
+            result = subprocess.run(
+                ["sudo", "/usr/sbin/nvme", "smart-log", "/dev/nvme0", "-o", "json"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode != 0:
+                raise ValueError(f"Command failed with return code {result.returncode}: {result.stderr}")
+
+            stdout = result.stdout
+            js = json.loads(stdout.strip())
+            return float(js["temperature"]) - 273.15 if "temperature" in js else None
+        except subprocess.TimeoutExpired:
+            pass
+        except Exception as e:
+            if not self.err_ssd_shown:
+                print(f"Error reading SSD temperature: {e}")
+                self.err_ssd_shown = True
+        return None
+
     def compute_metrics(self):
         try:
             self.metrics.temp_zone0 = self.read_temp("/sys/class/thermal/thermal_zone0/temp")
             self.metrics.temp_zone1 = self.read_temp("/sys/class/thermal/thermal_zone1/temp")
+            self.metrics.temp_ssd = self.read_ssd_temp()
 
             load_avg = psutil.getloadavg()
             self.metrics.load_avg_1 = load_avg[0]
@@ -91,5 +118,5 @@ class Bark:
 
 
 if __name__ == "__main__":
-    bark = Bark()
-    bark.main_loop()
+    worker = MetricsCollector()
+    worker.main_loop()

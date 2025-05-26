@@ -25,6 +25,7 @@ touch /var/log/ph4metrics.log
 chown ph4metrics:ph4metrics /var/log/ph4metrics.json
 chown ph4metrics:ph4metrics /var/log/ph4metrics.log
 
+echo 'ph4metrics ALL=(ALL) NOPASSWD: /usr/sbin/nvme smart-log /dev/nvme0 -o json' | sudo tee /etc/sudoers.d/ph4metrics-nvme > /dev/null
 cp ph4metrics.service /etc/systemd/system/ph4metrics.service
 systemctl daemon-reload
 
