@@ -1,0 +1,28 @@
+# -----------------------------------------
+# /etc/systemd/system/ph4sense.service
+# -----------------------------------------
+[Unit]
+Description=ph4sense
+After=network.target
+After=nut-server.service
+
+[Service]
+User=ph4sense
+Group=ph4sense
+WorkingDirectory=/tmp
+RuntimeDirectory=/tmp
+
+Type=simple
+Environment=DNS_PUBLIC=tcp
+Environment=TORSOCKS_ALLOW_INBOUND=1
+
+ExecStart=/etc/ph4sense/ph4sense.sh
+StandardOutput=append:/var/log/ph4sense.log
+StandardError=append:/var/log/ph4sense.log
+# Another alternative for logging is to execute ExecStart as /bin/bash -c ""
+
+RestartSec=5
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

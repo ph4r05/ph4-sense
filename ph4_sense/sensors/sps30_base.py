@@ -60,7 +60,7 @@ class SPS30:
     _WRONG_CLASS_TXT = "Object must be instantiated as an SPS30_I2C or SPS30_UART"
 
     def __init__(self):
-        if type(self) == SPS30:  # pylint: disable=unidiomatic-typecheck
+        if type(self) is SPS30:  # pylint: disable=unidiomatic-typecheck; noqa: E721
             raise TypeError(self._WRONG_CLASS_TXT)
 
         self.aqi_reading = {k: None for k in self.FIELD_NAMES}

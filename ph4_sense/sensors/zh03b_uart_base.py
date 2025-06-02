@@ -26,7 +26,7 @@ class Zh03bUartBase:
         Set ZH03B Question and Answer mode
         Returns:  Nothing
         """
-        self.uart.write(b"\xFF\x01\x78\x41\x00\x00\x00\x00\x46")
+        self.uart.write(b"\xff\x01\x78\x41\x00\x00\x00\x00\x46")
         self.uart.flush_input()
         return
 
@@ -35,7 +35,7 @@ class Zh03bUartBase:
         Set to default streaming mode of readings
         Returns: Nothing
         """
-        self.uart.write(b"\xFF\x01\x78\x40\x00\x00\x00\x00\x47")
+        self.uart.write(b"\xff\x01\x78\x40\x00\x00\x00\x00\x47")
         self.uart.flush_input()
         return
 
@@ -45,10 +45,10 @@ class Zh03bUartBase:
         Returns: int pm10, int pm25, int pm100
         """
         self.uart.flush_input()
-        self.uart.write(b"\xFF\x01\x86\x00\x00\x00\x00\x00\x79")
+        self.uart.write(b"\xff\x01\x86\x00\x00\x00\x00\x00\x79")
         sleep_ms(_SLEEP_READ_TIME)
         reading = self.uart.read(2)
-        if reading != b"\xFF\x86":
+        if reading != b"\xff\x86":
             # print(hex(reading))
             return None
 
@@ -64,10 +64,10 @@ class Zh03bUartBase:
         """
         self.uart.flush_input()
         if to_dormant:  # Turn fan off
-            self.uart.write(b"\xFF\x01\xA7\x01\x00\x00\x00\x00\x57")
+            self.uart.write(b"\xff\x01\xa7\x01\x00\x00\x00\x00\x57")
             sleep_ms(_SLEEP_TIME)
             response = self.uart.read(3)
-            if response == b"\xFF\xA7\x01":
+            if response == b"\xff\xa7\x01":
                 self.uart.flush_input()
                 return True
             else:
@@ -76,10 +76,10 @@ class Zh03bUartBase:
                 return False
 
         else:
-            self.uart.write(b"\xFF\x01\xA7\x00\x00\x00\x00\x00\x58")
+            self.uart.write(b"\xff\x01\xa7\x00\x00\x00\x00\x00\x58")
             sleep_ms(_SLEEP_TIME)
             response = self.uart.read(3)
-            if response == b"\xFF\xA7\x01":
+            if response == b"\xff\xa7\x01":
                 self.uart.flush_input()
                 return True
             else:
@@ -93,7 +93,7 @@ class Zh03bUartBase:
         self.uart.flush_input()
         for _ in range(attempts):
             reading = self.uart.read(2)
-            if reading == b"\x42\x4D":
+            if reading == b"\x42\x4d":
                 buf2int(self.uart.read(2))  # frame_length
                 self.uart.read(6)  # reserved bytes readout
                 pm10 = buf2int(self.uart.read(2))

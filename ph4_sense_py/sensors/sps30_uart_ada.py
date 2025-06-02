@@ -1,35 +1,35 @@
 """
-    Library to read data from Sensirion SPS30 particulate matter sensor
+Library to read data from Sensirion SPS30 particulate matter sensor
 
-    by
-    Szymon Jakubiak
-    Twitter: @SzymonJakubiak
-    LinkedIn: https://pl.linkedin.com/in/szymon-jakubiak
+by
+Szymon Jakubiak
+Twitter: @SzymonJakubiak
+LinkedIn: https://pl.linkedin.com/in/szymon-jakubiak
 
-    MIT License
+MIT License
 
-    Copyright (c) 2018 Szymon Jakubiak
+Copyright (c) 2018 Szymon Jakubiak
 
-    Permission is hereby granted, free of charge, to any person obtaining a copy
-    of this software and associated documentation files (the "Software"), to deal
-    in the Software without restriction, including without limitation the rights
-    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-    copies of the Software, and to permit persons to whom the Software is
-    furnished to do so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-    The above copyright notice and this permission notice shall be included in all
-    copies or substantial portions of the Software.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-    SOFTWARE.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
-    Units for measurements:
-        PM1, PM2.5, PM4 and PM10 are in ug/m^3, number concentrations are in #/cm^3
+Units for measurements:
+    PM1, PM2.5, PM4 and PM10 are in ug/m^3, number concentrations are in #/cm^3
 """
 
 import struct
@@ -59,14 +59,14 @@ class SPS30AdaUart(SPS30):
 
     @staticmethod
     def reverse_byte_stuffing(raw: bytes) -> bytes:
-        if b"\x7D\x5E" in raw:
-            raw = raw.replace(b"\x7D\x5E", b"\x7E")
-        if b"\x7D\x5D" in raw:
-            raw = raw.replace(b"\x7D\x5D", b"\x7D")
-        if b"\x7D\x31" in raw:
-            raw = raw.replace(b"\x7D\x31", b"\x11")
-        if b"\x7D\x33" in raw:
-            raw = raw.replace(b"\x7D\x33", b"\x13")
+        if b"\x7d\x5e" in raw:
+            raw = raw.replace(b"\x7d\x5e", b"\x7e")
+        if b"\x7d\x5d" in raw:
+            raw = raw.replace(b"\x7d\x5d", b"\x7d")
+        if b"\x7d\x31" in raw:
+            raw = raw.replace(b"\x7d\x31", b"\x11")
+        if b"\x7d\x33" in raw:
+            raw = raw.replace(b"\x7d\x33", b"\x13")
         return raw
 
     def read(self):
