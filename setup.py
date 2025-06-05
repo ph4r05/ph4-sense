@@ -19,6 +19,7 @@ install_requires = [
     "adafruit-circuitpython-ahtx0",
     "adafruit-circuitpython-scd4x",
     "adafruit-circuitpython-ccs811",
+    "adafruit-extended-bus",
     "paho-mqtt",
     "psutil",
     "pyftdi",

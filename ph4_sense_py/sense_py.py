@@ -28,6 +28,7 @@ class SenseiPy(Sensei):
         has_sgp41=False,
         scl_pin=None,
         sda_pin=None,
+        extended_i2c=None,
         config_file=None,
     ):
         super().__init__(
@@ -45,6 +46,7 @@ class SenseiPy(Sensei):
             sda_pin=sda_pin,
         )
         self.config_file = config_file
+        self.extended_i2c = extended_i2c
         self.args = None
 
     def load_config_data(self):
@@ -52,7 +54,12 @@ class SenseiPy(Sensei):
         return load_config_file(cfile)
 
     def start_bus(self):
-        self.i2c = busio.I2C(self.scl_pin, self.sda_pin)
+        if self.extended_i2c:
+            from adafruit_extended_bus import ExtendedI2C
+
+            self.i2c = ExtendedI2C(self.extended_i2c)
+        else:
+            self.i2c = busio.I2C(self.scl_pin, self.sda_pin)
 
     def get_uart_builder(self, desc):
         if desc["type"] == "uart":

@@ -15,7 +15,8 @@ if __name__ == "__main__":
     sys.argv[0] = re.sub(r"(-script\.pyw|\.exe)?$", "", sys.argv[0])
 
     sensei = SenseiPy(
-        scl_pin=board.SCL,
-        sda_pin=board.SDA,
+        extended_i2c=3,
+        scl_pin=board.D23,
+        sda_pin=board.D22,
     )
     sys.exit(sensei.main())
