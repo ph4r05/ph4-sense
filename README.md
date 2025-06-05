@@ -107,7 +107,7 @@ while true; do nc -ul 9998; done
 
 ```bash
 sudo apt update && sudo apt upgrade -y
-sudo apt install build-essential zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev libsqlite3-dev wget libbz2-dev
+sudo apt install build-essential zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev libsqlite3-dev wget libbz2-dev liblzma-dev uuid-dev libgdbm-dev
 wget https://www.python.org/ftp/python/3.13.3/Python-3.13.3.tgz
 tar -xf Python-3.13.*.tgz
 cd Python-3.13.*/
@@ -116,6 +116,7 @@ make -j $(nproc)
 sudo make altinstall
 
 python3.13 --version
+python3.13 -m ensurepip
 ```
 
 ## Dependencies
