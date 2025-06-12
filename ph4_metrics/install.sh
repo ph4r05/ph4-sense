@@ -20,6 +20,8 @@ cp ph4_metrics/metrics.py /usr/local/bin/ph4-metrics
 chmod 0755 "/usr/local/bin/ph4-metrics"
 chown ph4metrics:ph4metrics "/usr/local/bin/ph4-metrics"
 
+cp ph4metrics-nvme /etc/sudoers.d/ph4metrics-nvme
+
 touch /var/log/ph4metrics.json
 touch /var/log/ph4metrics.log
 chown ph4metrics:ph4metrics /var/log/ph4metrics.json

@@ -8,6 +8,11 @@
       value_template: "{{ value_json.temp_zone1 }}"
       unit_of_measurement: "C"
 
+    - name: "Temp SSD"
+      state_topic: "metrics/liv"
+      value_template: "{{ value_json.temp_ssd }}"
+      unit_of_measurement: "C"
+
     - name: "Load Avg 1"
       state_topic: "metrics/liv"
       value_template: "{{ value_json.load_avg1 }}"
