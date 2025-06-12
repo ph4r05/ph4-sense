@@ -19,8 +19,7 @@ chmod 0755 "${MDIR}/ph4metrics.sh"
 cp ph4_metrics/metrics.py /usr/local/bin/ph4-metrics
 chmod 0755 "/usr/local/bin/ph4-metrics"
 chown ph4metrics:ph4metrics "/usr/local/bin/ph4-metrics"
-
-cp ph4metrics-nvme /etc/sudoers.d/ph4metrics-nvme
+cp logrotate/ph4metrics /etc/logrotate.d/ph4metrics
 
 touch /var/log/ph4metrics.json
 touch /var/log/ph4metrics.log

@@ -1,1 +1,0 @@
-ph4metrics ALL=(ALL) NOPASSWD: /usr/sbin/nvme smart-log /dev/nvme0 -o json
