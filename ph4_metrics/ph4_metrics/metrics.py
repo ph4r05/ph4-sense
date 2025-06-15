@@ -1,5 +1,6 @@
 import json
 import os
+import socket
 import subprocess
 import time
 from typing import Optional
@@ -18,17 +19,25 @@ class Metrics:
     mem_percent: Optional[float] = None
 
 
+def get_hostname():
+    return socket.gethostname()
+
+
 class MetricsCollector:
     def __init__(self):
         self.mqtt_client = None
-        self.mqtt_broker = "localhost"
+        self.mqtt_broker = os.getenv("MQTT_BROKER", "localhost")
         self.mqtt_port = 1883
-        self.mqtt_topic_sub = "metrics/liv"
+        self.mqtt_topic_sub = self.build_mqtt_topic()
         self.err_ssd_shown = False
         self.metrics = Metrics()
 
+    @classmethod
+    def build_mqtt_topic(cls) -> str:
+        return os.getenv("MQTT_TOPIC", f"metrics/{get_hostname()}")
+
     def create_mqtt_client(self):
-        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, "metrics/liv")
+        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, self.mqtt_topic_sub)
         client.on_message = self.mqtt_callback
         client.connect(self.mqtt_broker, self.mqtt_port, keepalive=60)
         client.subscribe(self.mqtt_topic_sub)
@@ -46,7 +55,7 @@ class MetricsCollector:
 
     def publish(self):
         self.publish_payload(
-            "metrics/liv",
+            self.mqtt_topic_sub,
             {
                 "temp_zone0": self.metrics.temp_zone0,
                 "temp_zone1": self.metrics.temp_zone1,
@@ -101,6 +110,7 @@ class MetricsCollector:
             print(f"Error in metrics collection {e}")
 
     def main_loop(self):
+        print(f"Starting Metrics Collector, {self.mqtt_broker=}, {self.mqtt_port=}, {self.mqtt_topic_sub=}")
         while True:
             try:
                 self.mqtt_client = self.create_mqtt_client()

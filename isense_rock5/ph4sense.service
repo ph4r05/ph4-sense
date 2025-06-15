@@ -15,6 +15,7 @@ RuntimeDirectory=/tmp
 Type=simple
 Environment=DNS_PUBLIC=tcp
 Environment=TORSOCKS_ALLOW_INBOUND=1
+Environment=PYTHONUNBUFFERED=1
 
 ExecStart=/etc/ph4sense/ph4sense.sh
 StandardOutput=append:/var/log/ph4sense.log

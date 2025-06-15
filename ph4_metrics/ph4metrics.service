@@ -15,6 +15,8 @@ RuntimeDirectory=/tmp
 Type=simple
 Environment=DNS_PUBLIC=tcp
 Environment=TORSOCKS_ALLOW_INBOUND=1
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/etc/ph4metrics.env
 
 ExecStart=/etc/ph4metrics/ph4metrics.sh
 StandardOutput=append:/var/log/ph4metrics.log
