@@ -53,7 +53,7 @@ class Blinds(hass.Hass):
         self.morning_automation_enabled = None
         self.morning_weekend_automation_enabled = None
         self.winter_mode: bool = False
-        self.living_position: int = 35
+        self.living_position: int = 40
         self.living_tilt: float = 0.2
         self.tilt: float = 0.9
 
@@ -290,7 +290,7 @@ class Blinds(hass.Hass):
         return None
 
     def update_weekdays_open_time(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
-        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        self.log(f"on_update update_weekdays_open_time: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
         parsed_time = self.get_time_attribute(self.field_weekdays_open_time)
         if parsed_time is None:
             self.log("Failed to retrieve weekday_blind_open_time state.")
@@ -301,7 +301,7 @@ class Blinds(hass.Hass):
         self.on_morning_recompute()
 
     def update_weekends_open_time(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
-        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        self.log(f"on_update update_weekends_open_time: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
         parsed_time = self.get_time_attribute(self.field_weekends_open_time)
         if parsed_time is None:
             self.log("Failed to retrieve weekday_blind_open_time state.")
@@ -312,7 +312,7 @@ class Blinds(hass.Hass):
         self.on_morning_recompute()
 
     def update_guest_weekdays_open_time_guest(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
-        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        self.log(f"on_update update_guest_weekdays_open_time_guest: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
         open_time = self.get_time_attribute(self.field_guest_weekdays_open_time)
 
         if open_time is None:
@@ -336,32 +336,35 @@ class Blinds(hass.Hass):
         self.on_morning_recompute()
 
     def update_blind_guest_mode(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
-        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        self.log(f"on_update update_blind_guest_mode: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
         self.guest_mode = self.to_bool(self.get_state(self.field_guest_mode))
         self.log(f"{self.guest_mode=}")
 
     def update_blind_automation_enabled(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
-        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        self.log(f"on_update update_blind_automation_enabled: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
         self.automation_enabled = self.to_bool(self.get_state(self.field_automation_enabled))
         self.log(f"{self.automation_enabled=}")
+        self.on_morning_recompute()
 
     def update_blind_bedroom_automation_enabled(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
-        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        self.log(
+            f"on_update update_blind_bedroom_automation_enabled: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}"
+        )
         self.bedroom_automation_enabled = self.to_bool(self.get_state(self.field_bedroom_automation_enabled))
         self.log(f"{self.bedroom_automation_enabled=}")
 
     def update_blind_night_venting_enabled(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
-        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        self.log(f"on_update update_blind_night_venting_enabled: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
         self.night_venting_enabled = self.to_bool(self.get_state(self.field_night_venting_enabled))
         self.log(f"{self.night_venting_enabled=}")
 
     def update_blind_close_on_dawn_enabled(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
-        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        self.log(f"on_update update_blind_close_on_dawn_enabled: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
         self.close_on_dawn_enabled = self.to_bool(self.get_state(self.field_close_on_dawn_enabled))
         self.log(f"{self.close_on_dawn_enabled=}")
 
     def update_blind_dusk_offset(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
-        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        self.log(f"on_update update_blind_dusk_offset: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
         value = self.get_state(self.field_dusk_offset)
 
         if value is None:
@@ -373,19 +376,24 @@ class Blinds(hass.Hass):
         self.on_dusk_recompute()
 
     def update_blind_dusk_automation_enabled(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
-        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        self.log(f"on_update update_blind_dusk_automation_enabled: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
         self.dusk_automation_enabled = self.to_bool(self.get_state(self.field_dusk_automation_enabled))
         self.log(f"{self.dusk_automation_enabled=}")
 
     def update_blind_full_open_automation_enabled(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
-        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        self.log(
+            f"on_update update_blind_full_open_automation_enabled: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}"
+        )
         self.full_open_automation_enabled = self.to_bool(self.get_state(self.field_full_open_automation_enabled))
         self.log(f"{self.full_open_automation_enabled=}")
 
     def update_blinds_morning_automation_enabled(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
-        self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
+        self.log(
+            f"on_update update_blinds_morning_automation_enabled: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}"
+        )
         self.morning_automation_enabled = self.to_bool(self.get_state(self.field_morning_automation_enabled))
         self.log(f"{self.morning_automation_enabled=}")
+        self.on_morning_recompute()
 
     def update_blinds_morning_weekend_automation_enabled(
         self, entity=None, attribute=None, old=None, new=None, kwargs=None
@@ -395,6 +403,7 @@ class Blinds(hass.Hass):
             self.get_state(self.field_morning_weekend_automation_enabled)
         )
         self.log(f"{self.morning_weekend_automation_enabled=}")
+        self.on_morning_recompute()
 
     def update_blind_pre_dusk_offset(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
         self.log(f"on_update: {entity=}, {attribute=}, {old=}, {new=}, {kwargs=}")
@@ -804,7 +813,8 @@ class Blinds(hass.Hass):
     def tilt2slat(cls, tilt: Optional[float]) -> Optional[float]:
         if tilt is None:
             return None
-        res = 50.0 + ((tilt - 0.9) / 0.9) * 50.0
+        middle = 60.0
+        res = middle + ((tilt - cls.OPEN_HALF) / cls.OPEN_HALF) * middle
         return int(max(0.0, min(100.0, res)))
 
     def blinds_pos_tilt_v2(self, blind, pos: Optional[float] = None, tilt: Optional[float] = None):
