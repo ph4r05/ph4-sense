@@ -2,7 +2,7 @@ import datetime
 import json
 from datetime import time
 from enum import Enum, auto
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import appdaemon.plugins.hass.hassapi as hass
 import requests
@@ -776,12 +776,44 @@ class Blinds(hass.Hass):
         else:
             self.blinds_pos_tilt(blind, pos, tilt)
 
+    def blinds_tilt(self, blind, tilt):
+        if self.is_blind_v2(blind):
+            return self.blinds_pos_tilt_v2(blind, tilt=self.tilt2slat(tilt))
+        else:
+            return self.blinds_tilt_v1(blind, tilt=tilt)
+
     def blinds_pos_tilt(self, blind, pos, tilt):
+        if self.is_blind_v2(blind):
+            return self.blinds_pos_tilt_v2(blind, pos=pos, tilt=self.tilt2slat(tilt))
+        else:
+            return self.blinds_pos_tilt_v1(blind, pos=pos, tilt=tilt)
+
+    def is_blind_v2(self, blind):
+        blind_rec = self.blinds[blind]
+        return bool(blind_rec.get("tilt", 0))
+
+    def blinds_pos_tilt_v1(self, blind, pos, tilt):
         data = {"id": 1, "method": "Script.Eval", "params": {"id": 1, "code": f"posAndTilt({pos}, {tilt})"}}
         return self.blinds_req(blind, data)
 
-    def blinds_tilt(self, blind, tilt):
+    def blinds_tilt_v1(self, blind, tilt):
         data = {"id": 1, "method": "Script.Eval", "params": {"id": 1, "code": f"tilt({tilt})"}}
+        return self.blinds_req(blind, data)
+
+    @classmethod
+    def tilt2slat(cls, tilt: Optional[float]) -> Optional[float]:
+        if tilt is None:
+            return None
+        res = 50.0 + ((tilt - 0.9) / 0.9) * 50.0
+        return int(max(0.0, min(100.0, res)))
+
+    def blinds_pos_tilt_v2(self, blind, pos: Optional[float] = None, tilt: Optional[float] = None):
+        payload: Dict[str, Any] = {"id": 0}
+        if pos is not None:
+            payload["pos"] = pos
+        if tilt is not None:
+            payload["slat_pos"] = tilt
+        data = {"id": 1, "method": "Cover.GoToPosition", "params": payload}
         return self.blinds_req(blind, data)
 
     def blinds_req(self, blind, data):

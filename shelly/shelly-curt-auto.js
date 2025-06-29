@@ -200,6 +200,12 @@ Shelly.addEventHandler(function (event) {
     }
   }
 
+  let uptime = Shelly.getComponentStatus("sys").uptime;
+  if (uptime < 10) {
+    print("Ignoring event during boot, uptime: ", uptime);
+    return;
+  }
+
   // Automation processing
   if (event.info && (event.info.event === "stopped" || event.info.event === "closed" || event.info.event === "opened")) {
     processEvent();
