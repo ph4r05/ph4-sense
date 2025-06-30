@@ -742,7 +742,7 @@ class Blinds(hass.Hass):
         if self.bedroom_automation_enabled:
             self.blinds_pos_tilt(self.BLIND_BEDROOM, 100, 0)
 
-    def blinds_morning_context_automated(self):
+    def blinds_morning_context_automated(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
         if not self.morning_automation_enabled:
             self.log("Morning automation disabled")
             return
@@ -820,9 +820,9 @@ class Blinds(hass.Hass):
     def blinds_pos_tilt_v2(self, blind, pos: Optional[float] = None, tilt: Optional[float] = None):
         payload: Dict[str, Any] = {"id": 0}
         if pos is not None:
-            payload["pos"] = pos
+            payload["pos"] = int(pos)
         if tilt is not None:
-            payload["slat_pos"] = tilt
+            payload["slat_pos"] = int(tilt)
         data = {"id": 1, "method": "Cover.GoToPosition", "params": payload}
         return self.blinds_req(blind, data)
 
