@@ -820,9 +820,9 @@ class Blinds(hass.Hass):
     def blinds_pos_tilt_v2(self, blind, pos: Optional[float] = None, tilt: Optional[float] = None):
         payload: Dict[str, Any] = {"id": 0}
         if pos is not None:
-            payload["pos"] = int(pos)
+            payload["pos"] = int(float(pos))
         if tilt is not None:
-            payload["slat_pos"] = int(tilt)
+            payload["slat_pos"] = int(float(tilt))
         data = {"id": 1, "method": "Cover.GoToPosition", "params": payload}
         return self.blinds_req(blind, data)
 
