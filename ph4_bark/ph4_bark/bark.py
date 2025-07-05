@@ -94,9 +94,9 @@ class Bark:
                 ("RMS", "rms"),
                 ("ZC", "zero_crossings"),
             ]
-            + [(f"MFCC {i}", f"mfccs[{i}]") for i in range(1, 13)]
-            + [(f"MelB {i}", f"mel_band_energies[{i}]") for i in range(1, 6)]
-            + [(f"Fband {i+1}", f"band_energies_timed[{i}]") for i in range(1, 6)]
+            + [(f"MFCC {i}", f"mfccs[{i}]") for i in range(0, 13)]
+            + [(f"MelB {i}", f"mel_band_energies[{i}]") for i in range(0, 6)]
+            + [(f"Fband {i+1}", f"band_energies_timed[{i}]") for i in range(0, 5)]
         )
 
         suffix = f" {get_hostname()}" if self.add_host_suffix else ""
