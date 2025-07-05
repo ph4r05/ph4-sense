@@ -16,6 +16,7 @@ Type=simple
 Environment=DNS_PUBLIC=tcp
 Environment=TORSOCKS_ALLOW_INBOUND=1
 Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/etc/ph4bark.env
 
 ExecStart=/etc/ph4bark/ph4bark.sh
 StandardOutput=append:/var/log/ph4bark.log

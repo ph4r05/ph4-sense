@@ -1,7 +1,11 @@
 import json
+import os
+import queue
+import socket
 import time
 from queue import Queue
 from threading import Thread
+from typing import Union
 
 import librosa
 import numpy as np
@@ -10,12 +14,29 @@ import sounddevice as sd
 from scipy.signal import stft
 
 
+def get_hostname():
+    return socket.gethostname()
+
+
+def str2bool(value: Union[None, bool, str]) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.lower() in ("yes", "true", "t", "1")
+    return False
+
+
 class Bark:
+    BIRTH_TOPIC = "homeassistant/status"
+
     def __init__(self):
         self.mqtt_client = None
-        self.mqtt_broker = "localhost"
+        self.mqtt_broker = os.getenv("MQTT_BROKER", "localhost")
         self.mqtt_port = 1883
-        self.mqtt_topic_sub = "bark"
+        self.mqtt_topic_recv = self.build_mqtt_topic()
+        self.mqtt_topic_sub = self.mqtt_topic_recv + "/sub"
 
         # Parameters
         self.sampling_rate = 44100  # 22050  # Hz
@@ -29,23 +50,79 @@ class Bark:
         self.aggregation_type = "mean"  # Can be 'mean' or 'max'
         self.chunk_duration = 5  # Duration of each audio chunk in seconds
         self.queue_size = 300  # Maximum number of chunks to store in the queue
+        self.discovery_sent = False
+        self.add_host_suffix = str2bool(os.getenv("ADD_HOST_SUFFIX", "0"))
+
+    @classmethod
+    def build_mqtt_topic(cls) -> str:
+        return os.getenv("MQTT_TOPIC", f"bark/{get_hostname()}")
+
+    @classmethod
+    def topic_normalize(cls, topic: str) -> str:
+        return topic.replace("/", "_").replace("-", "_").replace(".", "_").replace(" ", "_").lower()
 
     def create_mqtt_client(self):
-        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, "bark/liv")
+        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, self.mqtt_topic_recv)
         client.on_message = self.mqtt_callback
         client.connect(self.mqtt_broker, self.mqtt_port, keepalive=60)
         client.subscribe(self.mqtt_topic_sub)
+        client.subscribe(self.BIRTH_TOPIC)
         return client
 
-    def mqtt_callback(self, topic=None, msg=None):
-        print("Received MQTT message:", topic, msg)
+    def mqtt_callback(self, client, userdata, message, *args, **kwargs):
+        topic = message.topic
+        payload = message.payload.decode()
+        print(f"Received MQTT message: {client=}, {userdata=}, {message=}, {topic=}, {payload=}")
+        if topic == self.BIRTH_TOPIC and payload == "online":
+            self.discovery_sent = False
 
     def publish_msg(self, topic: str, message: str):
         self.mqtt_client.publish(topic, message)
         print(f"Published {topic}:", message)
 
     def publish_payload(self, topic: str, payload: dict):
+        self.send_auto_discovery(topic, payload)
         self.publish_msg(topic, json.dumps(payload))
+
+    def send_auto_discovery(self, topic: str, payload: dict):
+        if self.discovery_sent:
+            return
+
+        # Published fields descriptors
+        desc = (
+            [
+                ("RMS", "rms"),
+                ("ZC", "zero_crossings"),
+            ]
+            + [(f"MFCC {i}", f"mfccs[{i}]") for i in range(1, 13)]
+            + [(f"MelB {i}", f"mel_band_energies[{i}]") for i in range(1, 6)]
+            + [(f"Fband {i+1}", f"band_energies_timed[{i}]") for i in range(1, 6)]
+        )
+
+        suffix = f" {get_hostname()}" if self.add_host_suffix else ""
+        for key, value in desc:
+            unique_id = f"{self.topic_normalize(topic)}_{self.topic_normalize(key)}"
+            discovery_topic = f"homeassistant/sensor/{unique_id}/config"
+            unit = "db"
+
+            discovery_payload = {
+                "name": f"Bark {key}{suffix}",
+                "state_topic": topic,
+                "unit_of_measurement": unit,
+                "value_template": "{{ value_json.%s }}" % value,
+                "json_attributes_topic": topic,
+                "unique_id": unique_id,
+                "device": {
+                    "identifiers": [get_hostname()],
+                    "name": get_hostname(),
+                    "manufacturer": "PH4",
+                    "model": "Bark",
+                },
+            }
+            self.publish_msg(discovery_topic, json.dumps(discovery_payload))
+            print(f"Published auto-discovery to {discovery_topic}: {discovery_payload}")
+
+        self.discovery_sent = True
 
     def publish(self, metrics):
         # Convert numpy arrays to lists and numpy types to native Python types for JSON serialization
@@ -63,7 +140,7 @@ class Bark:
 
         metrics_serializable = convert_metrics(metrics)
         self.publish_payload(
-            "bark/liv",
+            self.mqtt_topic_recv,
             metrics_serializable,
         )
 
@@ -163,21 +240,7 @@ class Bark:
             else:
                 time.sleep(duration)
 
-    def main_loop(self):
-        while True:
-            try:
-                self.mqtt_client = self.create_mqtt_client()
-                print("MQTT client connected")
-                break
-            except Exception as e:
-                print(f"Error in MQTT client {e}")
-                time.sleep(60)
-
-        audio_queue = Queue(maxsize=self.queue_size)
-        capture_thread = Thread(
-            target=self.audio_capture_thread, args=(audio_queue, self.chunk_duration, self.sampling_rate)
-        )
-        capture_thread.start()
+    def publisher_thread(self, audio_queue, publish_queue):
         exp_list_size = 60 // self.chunk_duration
 
         while True:
@@ -198,8 +261,53 @@ class Bark:
 
             time_total = time.time() - tstart
             aggregated_metrics = self.aggregate_metrics(metrics_list, self.aggregation_type)
-            self.publish(aggregated_metrics)
+            publish_queue.put(aggregated_metrics)
             print(f"Published, qsize: {audio_queue.qsize()}, est: {time_total}, comp: {tcomp}")
+
+    def main_loop(self):
+        print(
+            f"Starting Ph4bark, {self.mqtt_broker=}, {self.mqtt_port=}, {self.mqtt_topic_recv=}, {self.mqtt_topic_sub=}"
+        )
+        while True:
+            try:
+                self.mqtt_client = self.create_mqtt_client()
+                print("MQTT client connected")
+                break
+            except Exception as e:
+                print(f"Error in MQTT client {e}")
+                time.sleep(60)
+
+        audio_queue = Queue(maxsize=self.queue_size)
+        publish_queue = Queue(maxsize=10)
+        capture_thread = Thread(
+            target=self.audio_capture_thread, args=(audio_queue, self.chunk_duration, self.sampling_rate)
+        )
+        capture_thread.daemon = True
+        capture_thread.start()
+
+        publish_thread = Thread(target=self.publisher_thread, args=(audio_queue, publish_queue))
+        publish_thread.daemon = True
+        publish_thread.start()
+
+        while True:
+            tstart = time.time()
+            while time.time() - tstart < 60:
+                try:
+                    self.mqtt_client.loop(timeout=1.0)  # Process network events
+                except Exception as e:
+                    print(f"Error in MQTT loop {e}")
+                    break
+
+                while not publish_queue.empty():
+                    try:
+                        metrics = publish_queue.get(block=False)
+                        self.publish(metrics)
+                        print(f"Publish message sent, queue size: {publish_queue.qsize()}")
+                    except queue.Empty:
+                        continue
+                    except Exception as e:
+                        print(f"Error while publishing message {e}")
+                time.sleep(0.0001)  # Yield to allow other tasks to run
 
 
 if __name__ == "__main__":

@@ -30,7 +30,8 @@ class MetricsCollector:
         self.mqtt_client = None
         self.mqtt_broker = os.getenv("MQTT_BROKER", "localhost")
         self.mqtt_port = 1883
-        self.mqtt_topic_sub = self.build_mqtt_topic()
+        self.mqtt_topic_recv = self.build_mqtt_topic()
+        self.mqtt_topic_sub = self.mqtt_topic_recv + "/sub"
         self.err_ssd_shown = False
         self.discovery_sent = False
         self.metrics = Metrics()
@@ -44,7 +45,7 @@ class MetricsCollector:
         return topic.replace("/", "_").replace("-", "_").replace(".", "_")
 
     def create_mqtt_client(self):
-        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, self.mqtt_topic_sub)
+        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, self.mqtt_topic_recv)
         client.on_message = self.mqtt_callback
         client.connect(self.mqtt_broker, self.mqtt_port, keepalive=60)
         client.subscribe(self.mqtt_topic_sub)
@@ -100,7 +101,7 @@ class MetricsCollector:
 
     def publish(self):
         self.publish_payload(
-            self.mqtt_topic_sub,
+            self.mqtt_topic_recv,
             {
                 "temp_zone0": self.metrics.temp_zone0,
                 "temp_zone1": self.metrics.temp_zone1,
@@ -155,7 +156,9 @@ class MetricsCollector:
             print(f"Error in metrics collection {e}")
 
     def main_loop(self):
-        print(f"Starting Metrics Collector, {self.mqtt_broker=}, {self.mqtt_port=}, {self.mqtt_topic_sub=}")
+        print(
+            f"Starting Metrics Collector, {self.mqtt_broker=}, {self.mqtt_port=}, {self.mqtt_topic_recv=}, {self.mqtt_topic_sub=}"
+        )
         while True:
             try:
                 self.mqtt_client = self.create_mqtt_client()
@@ -176,6 +179,7 @@ class MetricsCollector:
                 except Exception as e:
                     print(f"Error in MQTT loop {e}")
                     break
+                time.sleep(0.0001)  # Yield to allow other tasks to run
 
             # self.mqtt_client.loop(timeout=60.0)  # Process network events
             # time.sleep(60)
