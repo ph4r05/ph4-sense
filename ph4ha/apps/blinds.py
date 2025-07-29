@@ -35,6 +35,7 @@ class Blinds(hass.Hass):
     ALL_BLINDS = [BLIND_LIV_BIG, BLIND_LIV_DOOR, BLIND_BEDROOM, BLIND_STUDY, BLIND_SKLAD]
     OPEN_HALF = 0.9
     OPEN_PRIVACY = 0.7
+    DEFAULT_RECENT_WINDOW = datetime.timedelta(hours=4)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -747,11 +748,11 @@ class Blinds(hass.Hass):
             self.log("Morning automation disabled")
             return
 
-        if self.happened_already(self.last_morning_context_event):
+        if self.happened_recently(self.last_morning_context_event):
             self.log("Morning context already happened")
             return
 
-        if self.happened_already(self.last_morning_event):
+        if self.happened_recently(self.last_morning_event):
             self.log("Morning already happened")
             return
 
@@ -855,8 +856,13 @@ class Blinds(hass.Hass):
         except Exception as e:
             self.log(f"Try cancel timer failed: {timer=}, {e=}")
 
-    def happened_already(self, event_time: Optional[datetime.datetime]) -> bool:
-        return event_time < datetime.datetime.now() if event_time else False
+    def happened_recently(
+        self, event_time: Optional[datetime.datetime], recent_offset: datetime.timedelta = DEFAULT_RECENT_WINDOW
+    ) -> bool:
+        if event_time is None:
+            return False
+        diff = datetime.datetime.now() - event_time
+        return datetime.timedelta(seconds=0) < diff < recent_offset
 
 
 def try_fnc(x, msg=None):
