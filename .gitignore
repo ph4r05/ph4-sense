@@ -11,3 +11,4 @@ config.json
 config.yaml
 ph4_esp32/config.json
 *.secret.md
+.env
