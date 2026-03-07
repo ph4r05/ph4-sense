@@ -16,7 +16,10 @@
 #        mbedtls/certs.h    — empty shim (mbedtls/certs.h removed in mbedtls 3.x)
 #   4. Patches utils/log.h with an #ifndef guard for __FILENAME__
 #      (ESP-IDF's assert.h also defines it; -Werror treats the double-define as error)
-#   5. Copies the Option A tuya_cloud.c into firmware/main/
+#   5. Copies firmware/main/ files:
+#        tuya_cloud.c   — TuyaLink SDK wrapper (tuyalink_core.h API)
+#        tuya_cacert.h  — Tuya root CA certificate for TLS
+#        CMakeLists.txt — updated REQUIRES (esp_driver_gpio, esp_http_server)
 
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -53,6 +56,12 @@ cp "$DOCS_DIR/log.h" "$SDK_DIR/utils/log.h"
 
 echo "==> Writing firmware/main/tuya_cloud.c..."
 cp "$DOCS_DIR/tuya_cloud.c" "$MAIN_DIR/tuya_cloud.c"
+
+echo "==> Writing firmware/main/tuya_cacert.h (Tuya root CA)..."
+cp "$DOCS_DIR/tuya_cacert.h" "$MAIN_DIR/tuya_cacert.h"
+
+echo "==> Writing firmware/main/CMakeLists.txt..."
+cp "$DOCS_DIR/main-CMakeLists.txt" "$MAIN_DIR/CMakeLists.txt"
 
 echo ""
 echo "Option A restored. Next steps:"

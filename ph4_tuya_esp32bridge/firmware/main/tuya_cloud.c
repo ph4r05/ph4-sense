@@ -2,19 +2,30 @@
  * tuya_cloud.c — Tuya IoT Core SDK wrapper
  *
  * SDK used: tuya-iot-core-sdk (https://github.com/tuya/tuya-iot-core-sdk)
+ * Protocol: TuyaLink (tuyalink_core.h / tuya_mqtt_context_t)
  *
  * Setup: add the SDK as a component in components/tuya-iot-core-sdk
  *   git submodule add https://github.com/tuya/tuya-iot-core-sdk \
  *       firmware/components/tuya-iot-core-sdk
  *
- * The SDK handles:
- *   - Device activation (first pairing with SmartLife app via EZ/AP token)
- *   - MQTT connection to Tuya cloud (m1.tuyacn.com:8883 TLS)
- *   - DP registration, report, receive
- *   - Heartbeat / reconnect
+ * Authentication:
+ *   The TuyaLink SDK requires pre-provisioned credentials:
+ *     device_id     = cfg->tuya_uuid    (from Tuya IoT Platform -> Device -> View)
+ *     device_secret = cfg->tuya_auth_key
+ *   cfg->tuya_pid (product ID) is used only for logging.
+ *
+ *   There is no EZ/AP activation flow in tuyalink_core — credentials must be
+ *   obtained from the Tuya IoT Platform developer console before flashing.
+ *
+ * DP ↔ Property name mapping:
+ *   Tuya DPs are exposed as TuyaLink properties with names "dp_N" where N is
+ *   the numeric DP ID (e.g., dp_id=1 → property "dp_1", dp_id=101 → "dp_101").
+ *   The device's data model on Tuya IoT Platform must define properties with
+ *   these same names and type "Boolean".
  */
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -23,18 +34,12 @@
 #include "nvs_flash.h"
 #include "sdkconfig.h"
 
-/*
- * Include the Tuya IoT Core SDK header.
- * If the component is properly set up, this path resolves via CMake REQUIRES.
- *
- * Typical header layout for tuya-iot-core-sdk:
- *   include/tuya_iot.h        — main API
- *   include/tuya_cloud_types.h — DP types
- *   include/cJSON.h           — bundled JSON lib
- */
-#include "tuya_iot.h"
-#include "tuya_cloud_types.h"
+#include "tuyalink_core.h"
+#include "tuya_error_code.h"
+#include "tuya_config_defaults.h"
+#include "cJSON.h"
 
+#include "tuya_cacert.h"
 #include "config.h"
 #include "tuya_cloud.h"
 
@@ -43,7 +48,7 @@ static const char *TAG = "tuya_cloud";
 /* ------------------------------------------------------------------ */
 /* Internal state                                                       */
 /* ------------------------------------------------------------------ */
-static tuya_iot_client_t    s_client;
+static tuya_mqtt_context_t  s_client;
 static tuya_state_t         s_state       = TUYA_STATE_INIT;
 static tuya_dp_recv_cb_t    s_dp_cb       = NULL;
 static tuya_state_cb_t      s_state_cb    = NULL;
@@ -51,6 +56,9 @@ static void                *s_user_data   = NULL;
 static SemaphoreHandle_t    s_report_mutex;
 static TaskHandle_t         s_task_handle = NULL;
 static const app_config_t  *s_cfg         = NULL;
+
+/* device_id storage (tuya_mqtt_config_t points into this) */
+static char s_device_id[CFG_MAX_STR];
 
 /* Shadow state for all DPs — allows tuya_cloud_report_all() on reconnect */
 #define DP_SWITCH_BASE   1
@@ -69,14 +77,17 @@ static void set_state(tuya_state_t new_state)
     if (s_state_cb) s_state_cb(new_state, s_user_data);
 }
 
+/* Convert dp_id to TuyaLink property name: 1 → "dp_1", 101 → "dp_101" */
+static void dp_id_to_prop(uint8_t dp_id, char *buf, size_t len)
+{
+    snprintf(buf, len, "dp_%d", (int)dp_id);
+}
+
 /* ------------------------------------------------------------------ */
 /* Tuya SDK callbacks                                                   */
 /* ------------------------------------------------------------------ */
 
-/**
- * Called by Tuya SDK when it successfully connects to the cloud.
- */
-static void on_connected(tuya_iot_client_t *client)
+static void on_connected(tuya_mqtt_context_t *context, void *user_data)
 {
     ESP_LOGI(TAG, "Connected to Tuya cloud");
     set_state(TUYA_STATE_CONNECTED);
@@ -85,82 +96,54 @@ static void on_connected(tuya_iot_client_t *client)
     tuya_cloud_report_all();
 }
 
-/**
- * Called when disconnected from Tuya cloud.
- */
-static void on_disconnect(tuya_iot_client_t *client)
+static void on_disconnect(tuya_mqtt_context_t *context, void *user_data)
 {
     ESP_LOGW(TAG, "Disconnected from Tuya cloud");
     set_state(TUYA_STATE_DISCONNECTED);
 }
 
 /**
- * Called when Tuya cloud sends a DP update to the device.
+ * Called when Tuya cloud sends a property-set command to the device.
  *
- * dp_data: JSON string like:
- *   {"devId":"...","dps":{"1":true,"102":false}}
- *
- * We parse this and forward each DP to the registered callback.
+ * msg->data_json is a cJSON object: {"dp_1":{"value":true},"dp_2":{"value":false}}
+ * We extract the numeric DP ID from the property name and forward to dp_cb.
  */
-static void on_dp_receive(tuya_iot_client_t *client, const char *dp_data)
+static void on_messages(tuya_mqtt_context_t *context, void *user_data,
+                        const tuyalink_message_t *msg)
 {
-    ESP_LOGD(TAG, "DP received: %s", dp_data);
-
-    cJSON *root = cJSON_Parse(dp_data);
-    if (!root) {
-        ESP_LOGW(TAG, "Failed to parse DP JSON");
+    if (msg->type != THING_TYPE_PROPERTY_SET) {
         return;
     }
 
-    cJSON *dps = cJSON_GetObjectItemCaseSensitive(root, "dps");
-    if (!cJSON_IsObject(dps)) {
-        cJSON_Delete(root);
-        return;
-    }
+    ESP_LOGD(TAG, "Property SET: %s", msg->data_string ? msg->data_string : "(null)");
 
-    cJSON *dp_item;
-    cJSON_ArrayForEach(dp_item, dps) {
-        int dp_id = atoi(dp_item->string);
+    cJSON *root = msg->data_json;
+    if (!root) return;
+
+    cJSON *prop;
+    cJSON_ArrayForEach(prop, root) {
+        const char *key = prop->string;
+        if (!key || strncmp(key, "dp_", 3) != 0) continue;
+
+        int dp_id = atoi(key + 3);
         if (dp_id <= 0) continue;
 
-        bool value = cJSON_IsTrue(dp_item);
+        cJSON *val_obj = cJSON_GetObjectItemCaseSensitive(prop, "value");
+        if (!val_obj) continue;
+        bool value = cJSON_IsTrue(val_obj);
+
         ESP_LOGI(TAG, "DP %d = %s", dp_id, value ? "true" : "false");
 
-        /* Update shadow state */
+        /* Update shadow */
         int switch_idx = dp_id - DP_SWITCH_BASE;
         int socket_idx = dp_id - DP_SOCKET_BASE;
-
-        if (switch_idx >= 0 && switch_idx < s_cfg->switch_count) {
+        if (switch_idx >= 0 && switch_idx < s_cfg->switch_count)
             s_switch_state[switch_idx] = value;
-        } else if (socket_idx >= 0 && socket_idx < s_cfg->socket_count) {
+        else if (socket_idx >= 0 && socket_idx < s_cfg->socket_count)
             s_socket_state[socket_idx] = value;
-        }
 
-        /* Notify bridge layer */
         if (s_dp_cb) s_dp_cb((uint8_t)dp_id, value, s_user_data);
     }
-
-    cJSON_Delete(root);
-}
-
-/**
- * Called when device needs to enter pairing mode (activation).
- * Tuya SDK handles the EZ/AP token exchange internally; we just log it.
- */
-static void on_activate(tuya_iot_client_t *client)
-{
-    ESP_LOGI(TAG, "Device activation started — open SmartLife app to pair");
-    set_state(TUYA_STATE_ACTIVATING);
-}
-
-/**
- * Called when Tuya cloud requests a factory reset.
- */
-static void on_reset(tuya_iot_client_t *client)
-{
-    ESP_LOGW(TAG, "Factory reset requested by Tuya cloud");
-    set_state(TUYA_STATE_RESET);
-    tuya_cloud_factory_reset();
 }
 
 /* ------------------------------------------------------------------ */
@@ -170,15 +153,13 @@ static void tuya_loop_task(void *arg)
 {
     ESP_LOGI(TAG, "Tuya cloud task started");
 
-    while (1) {
-        /* tuya_iot_yield drives the SDK state machine:
+    for (;;) {
+        /* tuya_mqtt_loop drives the MQTT state machine:
          * - reconnects on disconnect
          * - sends heartbeats
          * - processes incoming messages
-         *
-         * Returns immediately if no work to do.
-         */
-        tuya_iot_client_yield(&s_client);
+         * Blocks up to MQTT_RECV_BLOCK_TIME_MS waiting for data. */
+        tuya_mqtt_loop(&s_client);
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
@@ -199,61 +180,34 @@ esp_err_t tuya_cloud_init(const app_config_t *cfg,
     s_report_mutex = xSemaphoreCreateMutex();
     if (!s_report_mutex) return ESP_ERR_NO_MEM;
 
-    /* PID is always required */
-    if (strlen(cfg->tuya_pid) == 0) {
-        ESP_LOGE(TAG, "Tuya PID not configured");
+    if (strlen(cfg->tuya_uuid) == 0 || strlen(cfg->tuya_auth_key) == 0) {
+        ESP_LOGE(TAG, "tuya_uuid and tuya_auth_key must both be configured");
+        ESP_LOGE(TAG, "Get them from Tuya IoT Platform: Cloud -> Device -> View Secret");
         return ESP_ERR_INVALID_ARG;
     }
 
-    /*
-     * Auth mode selection:
-     *
-     *   Pre-provisioned (UUID + AuthKey present):
-     *     Device connects directly to Tuya cloud on every boot.
-     *     UUID/AuthKey are burned into the firmware or stored in NVS.
-     *     Credentials obtained from Tuya developer console ->
-     *       Product -> Hardware Development -> Batch Test Devices.
-     *
-     *   Activation flow (UUID and/or AuthKey empty):
-     *     On first boot the SDK enters EZ/AP pairing mode.
-     *     Open SmartLife app -> Add Device -> follow instructions.
-     *     The app sends WiFi credentials + an activation token to the device.
-     *     Tuya cloud exchanges the token for a permanent UUID + AuthKey
-     *     which the SDK stores in the 'tuya_kv' NVS partition.
-     *     On all subsequent boots the stored credentials are used automatically.
-     *     This is the standard consumer flow and requires no pre-provisioning.
-     */
-    bool use_activation = (strlen(cfg->tuya_uuid) == 0 || strlen(cfg->tuya_auth_key) == 0);
+    strncpy(s_device_id, cfg->tuya_uuid, sizeof(s_device_id) - 1);
+    s_device_id[sizeof(s_device_id) - 1] = '\0';
 
-    if (use_activation) {
-        ESP_LOGI(TAG, "Tuya auth mode: ACTIVATION (SmartLife pairing required on first boot)");
-        ESP_LOGI(TAG, "PID=%s  — open SmartLife app and add the device to pair", cfg->tuya_pid);
-    } else {
-        ESP_LOGI(TAG, "Tuya auth mode: PRE-PROVISIONED  PID=%s  UUID=%.8s...",
-                 cfg->tuya_pid, cfg->tuya_uuid);
-    }
+    ESP_LOGI(TAG, "Tuya init: device_id=%.8s...  PID=%s", s_device_id, cfg->tuya_pid);
 
-    /* Initialize Tuya IoT client.
-     * When uuid/authkey are NULL/empty the SDK automatically uses the
-     * activation flow (EZ/AP token exchange via SmartLife app). */
-    const tuya_iot_config_t tuya_cfg = {
-        .productkey        = cfg->tuya_pid,
-        .uuid              = use_activation ? NULL : cfg->tuya_uuid,
-        .authkey           = use_activation ? NULL : cfg->tuya_auth_key,
-        .software_ver      = CONFIG_TUYA_SW_VERSION,
-        .modules           = NULL,
-        .skill_param       = NULL,
-        .storage_namespace = "tuya_kv",   /* must match partition label */
-        .on_connected      = on_connected,
-        .on_disconnect     = on_disconnect,
-        .on_dp_receive     = on_dp_receive,
-        .on_activate       = on_activate,
-        .on_reset          = on_reset,
-    };
+    int ret = tuya_mqtt_init(&s_client, &(const tuya_mqtt_config_t) {
+        .host          = "m1.tuyacn.com",
+        .port          = 8883,
+        .cacert        = (const uint8_t *)tuya_cacert_pem,
+        .cacert_len    = sizeof(tuya_cacert_pem),
+        .device_id     = s_device_id,
+        .device_secret = cfg->tuya_auth_key,
+        .keepalive     = MQTT_KEEPALIVE_INTERVALIN,
+        .timeout_ms    = MQTT_RECV_BLOCK_TIME_MS,
+        .user_data     = NULL,
+        .on_connected  = on_connected,
+        .on_disconnect = on_disconnect,
+        .on_messages   = on_messages,
+    });
 
-    int ret = tuya_iot_client_init(&s_client, &tuya_cfg);
     if (ret != OPRT_OK) {
-        ESP_LOGE(TAG, "tuya_iot_client_init failed: %d", ret);
+        ESP_LOGE(TAG, "tuya_mqtt_init failed: %d", ret);
         return ESP_FAIL;
     }
     return ESP_OK;
@@ -261,14 +215,12 @@ esp_err_t tuya_cloud_init(const app_config_t *cfg,
 
 esp_err_t tuya_cloud_start(void)
 {
-    /* Start the Tuya connection (handles activation + cloud connect) */
-    int ret = tuya_iot_client_connect(&s_client);
+    int ret = tuya_mqtt_connect(&s_client);
     if (ret != OPRT_OK) {
-        ESP_LOGE(TAG, "tuya_iot_client_connect failed: %d", ret);
+        ESP_LOGE(TAG, "tuya_mqtt_connect failed: %d", ret);
         return ESP_FAIL;
     }
 
-    /* Start the yield loop task */
     BaseType_t r = xTaskCreate(tuya_loop_task, "tuya_loop",
                                8192, NULL, 6, &s_task_handle);
     if (r != pdPASS) {
@@ -283,8 +235,7 @@ esp_err_t tuya_cloud_start(void)
 esp_err_t tuya_cloud_report_bool(uint8_t dp_id, bool value)
 {
     if (s_state != TUYA_STATE_CONNECTED) {
-        ESP_LOGW(TAG, "tuya_cloud_report_bool: not connected, DP %d queued", dp_id);
-        /* SDK may queue internally; proceed anyway */
+        ESP_LOGW(TAG, "tuya_cloud_report_bool: not connected, dp=%d", dp_id);
     }
 
     /* Update shadow */
@@ -295,16 +246,20 @@ esp_err_t tuya_cloud_report_bool(uint8_t dp_id, bool value)
     else if (socket_idx >= 0 && socket_idx < CFG_SOCKET_COUNT_MAX)
         s_socket_state[socket_idx] = value;
 
+    char prop[16];
+    dp_id_to_prop(dp_id, prop, sizeof(prop));
+
+    /* {"dp_N":{"value":true,"time":0}} */
+    char json[64];
+    snprintf(json, sizeof(json), "{\"%s\":{\"value\":%s,\"time\":0}}",
+             prop, value ? "true" : "false");
+
     xSemaphoreTake(s_report_mutex, portMAX_DELAY);
-
-    /* Build DP object for SDK
-     * tuya_iot_dp_bool_report(client, dp_id, value) — reports a single boolean DP */
-    int ret = tuya_iot_dp_bool_report(&s_client, dp_id, value);
-
+    int ret = tuyalink_thing_property_report(&s_client, s_device_id, json);
     xSemaphoreGive(s_report_mutex);
 
     if (ret != OPRT_OK) {
-        ESP_LOGE(TAG, "tuya_iot_dp_bool_report(dp=%d, val=%d) failed: %d", dp_id, value, ret);
+        ESP_LOGE(TAG, "property_report(dp=%d) failed: %d", dp_id, ret);
         return ESP_FAIL;
     }
 
@@ -318,15 +273,9 @@ esp_err_t tuya_cloud_report_multi(const uint8_t *dp_ids,
 {
     if (count == 0) return ESP_OK;
 
-    xSemaphoreTake(s_report_mutex, portMAX_DELAY);
-
-    /* Build a JSON DP object: {"1":true,"2":false,...} */
-    cJSON *dps = cJSON_CreateObject();
+    /* Build: {"dp_1":{"value":true,"time":0},...} */
+    cJSON *root = cJSON_CreateObject();
     for (uint8_t i = 0; i < count; i++) {
-        char key[8];
-        snprintf(key, sizeof(key), "%d", dp_ids[i]);
-        cJSON_AddBoolToObject(dps, key, values[i]);
-
         /* Update shadow */
         int switch_idx = dp_ids[i] - DP_SWITCH_BASE;
         int socket_idx = dp_ids[i] - DP_SOCKET_BASE;
@@ -334,19 +283,25 @@ esp_err_t tuya_cloud_report_multi(const uint8_t *dp_ids,
             s_switch_state[switch_idx] = values[i];
         else if (socket_idx >= 0 && socket_idx < CFG_SOCKET_COUNT_MAX)
             s_socket_state[socket_idx] = values[i];
+
+        char prop[16];
+        dp_id_to_prop(dp_ids[i], prop, sizeof(prop));
+
+        cJSON *item = cJSON_CreateObject();
+        cJSON_AddBoolToObject(item, "value", values[i]);
+        cJSON_AddNumberToObject(item, "time", 0);
+        cJSON_AddItemToObject(root, prop, item);
     }
 
-    /* tuya_iot_dp_obj_report sends a pre-built JSON DP object */
-    char *json = cJSON_PrintUnformatted(dps);
-    cJSON_Delete(dps);
+    char *json = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    if (!json) return ESP_ERR_NO_MEM;
 
-    int ret = OPRT_OK;
-    if (json) {
-        ret = tuya_iot_dp_obj_report(&s_client, json);
-        free(json);
-    }
-
+    xSemaphoreTake(s_report_mutex, portMAX_DELAY);
+    int ret = tuyalink_thing_property_report(&s_client, s_device_id, json);
     xSemaphoreGive(s_report_mutex);
+    free(json);
+
     return (ret == OPRT_OK) ? ESP_OK : ESP_FAIL;
 }
 
@@ -379,13 +334,13 @@ tuya_state_t tuya_cloud_get_state(void)
 
 void tuya_cloud_factory_reset(void)
 {
-    /* Erase Tuya's NVS namespace so it re-activates on next boot */
+    /* Erase Tuya's NVS namespace so credentials are cleared on next boot */
     nvs_handle_t h;
     if (nvs_open("tuya_kv", NVS_READWRITE, &h) == ESP_OK) {
         nvs_erase_all(h);
         nvs_commit(h);
         nvs_close(h);
-        ESP_LOGW(TAG, "Tuya KV store erased — will re-activate on next boot");
+        ESP_LOGW(TAG, "Tuya KV store erased");
     }
     esp_restart();
 }
@@ -396,5 +351,5 @@ void tuya_cloud_stop(void)
         vTaskDelete(s_task_handle);
         s_task_handle = NULL;
     }
-    tuya_iot_client_disconnect(&s_client);
+    tuya_mqtt_disconnect(&s_client);
 }
