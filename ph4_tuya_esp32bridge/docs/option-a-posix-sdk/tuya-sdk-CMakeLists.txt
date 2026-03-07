@@ -85,9 +85,22 @@ idf_component_register(
         esp_timer
 )
 
-# coreJSON uses `true` as an enum constant (e.g. `true = 1`), which is illegal
-# in C23 (where `true` is a keyword). Force C11 for that file only.
+# Per-file warning suppressions for third-party SDK files.
+# These files have minor C89/C99-era issues that are not bugs in our usage,
+# but -Werror in ESP-IDF 6.x / C23 mode promotes them to build failures.
+
+# coreJSON: (1) uses `true` as an enum constant — illegal in C23 → force C11.
+#           (2) char is unsigned on RISC-V, so `>= '\0'` is always true → -Wno-type-limits.
 set_source_files_properties(
     "${CMAKE_CURRENT_SOURCE_DIR}/libraries/coreJSON/source/core_json.c"
-    PROPERTIES COMPILE_FLAGS "-std=c11"
+    PROPERTIES COMPILE_FLAGS "-std=c11 -Wno-type-limits"
+)
+
+# tuyalink_core.c: (1) %d used for uint32_t (should be %lu/-PRIu32) → -Wno-format.
+#                  (2) signed/unsigned pointer mismatch (char* vs uint8_t*) → -Wno-pointer-sign.
+#                  (3) `return;` in non-void function (SDK bug, not on our code path) → -Wno-return-type.
+#                  (4) unused local variable → -Wno-unused-variable.
+set_source_files_properties(
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/tuyalink_core.c"
+    PROPERTIES COMPILE_FLAGS "-Wno-format -Wno-pointer-sign -Wno-return-type -Wno-return-mismatch -Wno-unused-variable"
 )
