@@ -18,6 +18,7 @@ static const char *TAG = "config";
 #define K_TUYA_PID          "tuya_pid"
 #define K_TUYA_UUID         "tuya_uuid"
 #define K_TUYA_AUTH         "tuya_auth"
+#define K_TUYA_HOST         "tuya_host"
 #define K_MQTT_HOST         "mqtt_host"
 #define K_MQTT_PORT         "mqtt_port"
 #define K_MQTT_USER         "mqtt_user"
@@ -58,6 +59,7 @@ esp_err_t config_load(app_config_t *cfg)
     strlcpy(cfg->tuya_pid,           CONFIG_TUYA_PID,             sizeof(cfg->tuya_pid));
     strlcpy(cfg->tuya_uuid,          CONFIG_TUYA_UUID,            sizeof(cfg->tuya_uuid));
     strlcpy(cfg->tuya_auth_key,      CONFIG_TUYA_AUTH_KEY,        sizeof(cfg->tuya_auth_key));
+    strlcpy(cfg->tuya_host,          CONFIG_TUYA_HOST,            sizeof(cfg->tuya_host));
     strlcpy(cfg->mqtt_host,          CONFIG_HA_MQTT_HOST,         sizeof(cfg->mqtt_host));
     strlcpy(cfg->mqtt_user,          CONFIG_HA_MQTT_USER,         sizeof(cfg->mqtt_user));
     strlcpy(cfg->mqtt_pass,          CONFIG_HA_MQTT_PASS,         sizeof(cfg->mqtt_pass));
@@ -92,6 +94,7 @@ esp_err_t config_load(app_config_t *cfg)
     nvs_read_str(h, K_TUYA_PID,     cfg->tuya_pid,          sizeof(cfg->tuya_pid));
     nvs_read_str(h, K_TUYA_UUID,    cfg->tuya_uuid,         sizeof(cfg->tuya_uuid));
     nvs_read_str(h, K_TUYA_AUTH,    cfg->tuya_auth_key,     sizeof(cfg->tuya_auth_key));
+    nvs_read_str(h, K_TUYA_HOST,    cfg->tuya_host,         sizeof(cfg->tuya_host));
     nvs_read_str(h, K_MQTT_HOST,    cfg->mqtt_host,         sizeof(cfg->mqtt_host));
     nvs_read_str(h, K_MQTT_USER,    cfg->mqtt_user,         sizeof(cfg->mqtt_user));
     nvs_read_str(h, K_MQTT_PASS,    cfg->mqtt_pass,         sizeof(cfg->mqtt_pass));
@@ -128,6 +131,7 @@ esp_err_t config_save(const app_config_t *cfg)
     nvs_write_str(h, K_TUYA_PID,     cfg->tuya_pid);
     nvs_write_str(h, K_TUYA_UUID,    cfg->tuya_uuid);
     nvs_write_str(h, K_TUYA_AUTH,    cfg->tuya_auth_key);
+    nvs_write_str(h, K_TUYA_HOST,    cfg->tuya_host);
     nvs_write_str(h, K_MQTT_HOST,    cfg->mqtt_host);
     nvs_write_str(h, K_MQTT_USER,    cfg->mqtt_user);
     nvs_write_str(h, K_MQTT_PASS,    cfg->mqtt_pass);
@@ -206,6 +210,7 @@ esp_err_t config_apply_json(app_config_t *cfg, const char *json_str)
         JSON_STR("pid",      tuya_pid);
         JSON_STR("uuid",     tuya_uuid);
         JSON_STR("auth_key", tuya_auth_key);
+        JSON_STR("host",     tuya_host);
     }
 
     /* MQTT */
@@ -265,6 +270,7 @@ char *config_to_json(const app_config_t *cfg)
     cJSON_AddStringToObject(tuya, "pid",      cfg->tuya_pid);
     cJSON_AddStringToObject(tuya, "uuid",     cfg->tuya_uuid);
     cJSON_AddStringToObject(tuya, "auth_key", cfg->tuya_auth_key);
+    cJSON_AddStringToObject(tuya, "host",     cfg->tuya_host);
     cJSON_AddItemToObject(root, "tuya", tuya);
 
     cJSON *mqtt = cJSON_CreateObject();

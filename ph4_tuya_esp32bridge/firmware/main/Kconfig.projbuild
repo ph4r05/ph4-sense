@@ -21,6 +21,17 @@ menu "PH4 Tuya ESP32 Bridge"
             help
                 Device Auth Key (32-char string) paired with the UUID above.
 
+        config TUYA_HOST
+            string "Tuya MQTT broker host"
+            default "m1.tuyaeu.com"
+            help
+                Regional MQTT broker host:
+                  CN (China):  m1.tuyacn.com
+                  EU (Europe): m1.tuyaeu.com
+                  US (America): m1.tuyaus.com
+                  IN (India):  m1.tuyain.com
+                Can be overridden at runtime via NVS (tuya.host in JSON).
+
         config TUYA_SW_VERSION
             string "Firmware version string"
             default "1.0.0"

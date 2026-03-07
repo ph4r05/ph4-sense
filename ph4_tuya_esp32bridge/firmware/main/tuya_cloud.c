@@ -191,8 +191,11 @@ esp_err_t tuya_cloud_init(const app_config_t *cfg,
 
     ESP_LOGI(TAG, "Tuya init: device_id=%.8s...  PID=%s", s_device_id, cfg->tuya_pid);
 
+    const char *host = (strlen(cfg->tuya_host) > 0) ? cfg->tuya_host : "m1.tuyaeu.com";
+    ESP_LOGI(TAG, "Tuya MQTT host: %s", host);
+
     int ret = tuya_mqtt_init(&s_client, &(const tuya_mqtt_config_t) {
-        .host          = "m1.tuyacn.com",
+        .host          = host,
         .port          = 8883,
         .cacert        = (const uint8_t *)tuya_cacert_pem,
         .cacert_len    = sizeof(tuya_cacert_pem),

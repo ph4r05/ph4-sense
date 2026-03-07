@@ -5,10 +5,11 @@
   },
   "tuya": {
     "pid":      "YOUR_PRODUCT_ID",
-    "uuid":     "",
-    "auth_key": ""
+    "uuid":     "YOUR_DEVICE_UUID_20CHARS",
+    "auth_key": "YOUR_DEVICE_AUTH_KEY_32CHARS",
+    "host":     "m1.tuyaeu.com"
   },
-  "_tuya_note": "uuid and auth_key can be left empty to use the activation flow (SmartLife app pairing). Fill them in only if you have pre-provisioned credentials from the Tuya developer console (Product -> Hardware Development -> Batch Test Devices).",
+  "_tuya_regions": "CN=m1.tuyacn.com  EU=m1.tuyaeu.com  US=m1.tuyaus.com  IN=m1.tuyain.com",
   "mqtt": {
     "host":         "192.168.1.100",
     "port":         1883,

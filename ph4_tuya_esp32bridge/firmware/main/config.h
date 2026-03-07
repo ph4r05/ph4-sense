@@ -22,6 +22,7 @@ typedef struct {
     char tuya_pid[CFG_MAX_STR];
     char tuya_uuid[CFG_MAX_STR];
     char tuya_auth_key[CFG_MAX_STR];
+    char tuya_host[CFG_MAX_STR];   /* MQTT broker host, e.g. m1.tuyacn.com / m1.tuyaeu.com / m1.tuyaus.com */
 
     /* Home Assistant MQTT */
     char mqtt_host[CFG_MAX_STR];
