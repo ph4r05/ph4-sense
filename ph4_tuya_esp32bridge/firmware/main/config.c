@@ -69,7 +69,11 @@ esp_err_t config_load(app_config_t *cfg)
     cfg->socket_count        = CONFIG_BRIDGE_SOCKET_COUNT;
     cfg->socket_auto_reset_ms = CONFIG_BRIDGE_SOCKET_AUTO_RESET_MS;
     cfg->socket_auto_reset_mask = 0xFFFF; /* all channels auto-reset by default */
-    cfg->wifi_ap_disabled = CONFIG_WIFI_DISABLE_AP;
+#ifdef CONFIG_WIFI_DISABLE_AP
+    cfg->wifi_ap_disabled = true;
+#else
+    cfg->wifi_ap_disabled = false;
+#endif
 
     /* Override with NVS values */
     nvs_handle_t h;

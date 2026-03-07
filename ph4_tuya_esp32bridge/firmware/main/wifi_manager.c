@@ -131,7 +131,7 @@ static void start_provisioning_server(void)
     ESP_LOGI(TAG, "Provisioning HTTP server started on port 80");
 }
 
-static void stop_provisioning_server(void)
+static void __attribute__((unused)) stop_provisioning_server(void)
 {
     if (s_httpd) {
         httpd_stop(s_httpd);
@@ -142,9 +142,13 @@ static void stop_provisioning_server(void)
 /* ------------------------------------------------------------------ */
 /* AP mode timeout task                                                 */
 /* ------------------------------------------------------------------ */
-static void ap_timeout_task(void *arg)
+static void __attribute__((unused)) ap_timeout_task(void *arg)
 {
+#ifdef CONFIG_WIFI_AP_MODE_TIMEOUT_S
     int timeout_s = CONFIG_WIFI_AP_MODE_TIMEOUT_S;
+#else
+    int timeout_s = 180;
+#endif
     ESP_LOGW(TAG, "AP mode active, timeout in %d seconds", timeout_s);
     vTaskDelay(pdMS_TO_TICKS((uint32_t)timeout_s * 1000));
     ESP_LOGW(TAG, "AP mode timed out — rebooting");
