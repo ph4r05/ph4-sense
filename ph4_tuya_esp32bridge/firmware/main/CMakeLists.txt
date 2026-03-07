@@ -21,5 +21,6 @@ idf_component_register(
         esp_driver_gpio
         esp_http_server
         esp_timer
+        lwip
         tuya-iot-core-sdk
 )

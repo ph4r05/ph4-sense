@@ -23,6 +23,7 @@
 #include "nvs_flash.h"
 #include "driver/gpio.h"
 #include "esp_timer.h"
+#include "esp_sntp.h"
 
 #include "config.h"
 #include "wifi_manager.h"
@@ -160,6 +161,28 @@ void app_main(void)
     }
 
     ESP_LOGI(TAG, "WiFi connected — starting cloud clients");
+
+    /* -------------------------------------------------------------- */
+    /* 5b. Sync time via SNTP (required for Tuya HMAC timestamp)       */
+    /* -------------------------------------------------------------- */
+    ESP_LOGI(TAG, "Syncing time via SNTP...");
+    esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
+    esp_sntp_setservername(0, "pool.ntp.org");
+    esp_sntp_init();
+
+    /* Wait up to 10 seconds for time to sync */
+    int sntp_retries = 0;
+    while (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED && sntp_retries < 20) {
+        vTaskDelay(pdMS_TO_TICKS(500));
+        sntp_retries++;
+    }
+    if (sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED) {
+        time_t now;
+        time(&now);
+        ESP_LOGI(TAG, "Time synced: %ld", (long)now);
+    } else {
+        ESP_LOGW(TAG, "SNTP sync timed out — Tuya auth may fail");
+    }
 
     /* -------------------------------------------------------------- */
     /* 6. Start HA MQTT client                                         */
