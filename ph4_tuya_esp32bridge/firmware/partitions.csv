@@ -1,0 +1,8 @@
+# ESP32-C6 4MB Flash Partition Table
+# Name,     Type, SubType,  Offset,   Size,    Flags
+nvs,        data, nvs,      0x9000,   0x6000,
+phy_init,   data, phy,      0xf000,   0x1000,
+factory,    app,  factory,  0x10000,  0x180000,
+ota_0,      app,  ota_0,    0x190000, 0x180000,
+tuya_kv,    data, nvs,      0x310000, 0x10000,
+app_cfg,    data, nvs,      0x320000, 0x10000,

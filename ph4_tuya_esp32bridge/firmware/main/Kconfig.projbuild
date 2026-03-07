@@ -1,0 +1,115 @@
+menu "PH4 Tuya ESP32 Bridge"
+
+    menu "Tuya Cloud"
+        config TUYA_PID
+            string "Tuya Product ID (PID)"
+            default ""
+            help
+                Product ID from Tuya IoT Developer Console.
+                Go to: Cloud > Development > Create Product > Get PID.
+
+        config TUYA_UUID
+            string "Tuya Device UUID"
+            default ""
+            help
+                Device UUID (20-char string) generated for this device.
+                Go to: Cloud > Development > Devices > Add Device > UUID.
+
+        config TUYA_AUTH_KEY
+            string "Tuya Device Auth Key"
+            default ""
+            help
+                Device Auth Key (32-char string) paired with the UUID above.
+
+        config TUYA_SW_VERSION
+            string "Firmware version string"
+            default "1.0.0"
+    endmenu
+
+    menu "WiFi"
+        config WIFI_SSID
+            string "Default WiFi SSID"
+            default ""
+            help
+                Default SSID - can be overridden at runtime via NVS.
+
+        config WIFI_PASSWORD
+            string "Default WiFi password"
+            default ""
+
+        config WIFI_AP_MODE_TIMEOUT_S
+            int "AP provisioning mode timeout (seconds)"
+            default 180
+            range 30 3600
+            help
+                Time to stay in AP mode waiting for provisioning.
+                After timeout, reboots and tries STA with saved credentials.
+    endmenu
+
+    menu "Home Assistant MQTT"
+        config HA_MQTT_HOST
+            string "MQTT broker host"
+            default "192.168.1.x"
+
+        config HA_MQTT_PORT
+            int "MQTT broker port"
+            default 1883
+            range 1 65535
+
+        config HA_MQTT_USER
+            string "MQTT username"
+            default ""
+
+        config HA_MQTT_PASS
+            string "MQTT password"
+            default ""
+
+        config HA_MQTT_TOPIC_PREFIX
+            string "MQTT topic prefix"
+            default "ph4/bridge"
+            help
+                All topics will be prefixed with this.
+                Switch: {prefix}/switch/{n}/set and /state
+                Socket: {prefix}/socket/{n}/set and /state
+
+        config HA_MQTT_KEEPALIVE_S
+            int "MQTT keepalive (seconds)"
+            default 60
+    endmenu
+
+    menu "Bridge Channels"
+        config BRIDGE_SWITCH_COUNT
+            int "Number of switch channels (HA -> Tuya)"
+            default 16
+            range 1 16
+            help
+                Mapped to Tuya DPs 1..N.
+                HA sets state, Tuya/SmartLife reflects it.
+
+        config BRIDGE_SOCKET_COUNT
+            int "Number of socket channels (Tuya -> HA)"
+            default 16
+            range 1 16
+            help
+                Mapped to Tuya DPs 101..101+N-1.
+                SmartLife triggers state, ESP32 forwards to HA via MQTT.
+
+        config BRIDGE_SOCKET_DP_BASE
+            int "Tuya DP base for socket channels"
+            default 101
+            help
+                First DP ID used for socket channels.
+                Switch channels always use DP 1..BRIDGE_SWITCH_COUNT.
+
+        config BRIDGE_SOCKET_AUTO_RESET_MS
+            int "Socket auto-reset delay (ms), 0=disabled"
+            default 500
+            range 0 10000
+            help
+                After forwarding a socket ON event to HA, reset the DP back to
+                OFF after this many ms. This allows SmartLife to re-trigger the
+                same socket again without toggling state manually.
+                Set to 0 to disable auto-reset (socket stays in triggered state).
+    endmenu
+
+endmenu

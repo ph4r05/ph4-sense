@@ -1,0 +1,6 @@
+{
+    "jupyter.jupyterCommandLineArguments": [
+
+    ],
+    "python.envFile": "${workspaceFolder}/.env"
+}

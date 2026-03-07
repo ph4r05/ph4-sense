@@ -1,0 +1,24 @@
+idf_component_register(
+    SRCS
+        "main.c"
+        "config.c"
+        "wifi_manager.c"
+        "tuya_cloud.c"
+        "ha_mqtt.c"
+        "dp_bridge.c"
+    INCLUDE_DIRS
+        "."
+    REQUIRES
+        nvs_flash
+        esp_wifi
+        esp_event
+        esp_netif
+        mqtt
+        # json
+        esp_http_client
+        esp_https_ota
+        mbedtls
+        driver
+        esp_timer
+        tuya-iot-core-sdk
+)
