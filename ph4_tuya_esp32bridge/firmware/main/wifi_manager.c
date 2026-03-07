@@ -172,9 +172,14 @@ static void wifi_event_handler(void *arg, esp_event_base_t base,
                 esp_wifi_connect();
                 notify(WIFI_STATE_CONNECTING);
             } else {
-                ESP_LOGE(TAG, "WiFi failed after %d attempts, starting AP mode", WIFI_MAX_RETRY);
                 xEventGroupSetBits(s_wifi_eg, WIFI_FAIL_BIT);
-                start_ap_mode();
+                if (s_cfg->wifi_ap_disabled) {
+                    ESP_LOGE(TAG, "WiFi failed after %d attempts; AP mode disabled, giving up",
+                             WIFI_MAX_RETRY);
+                } else {
+                    ESP_LOGE(TAG, "WiFi failed after %d attempts, starting AP mode", WIFI_MAX_RETRY);
+                    start_ap_mode();
+                }
             }
         }
         notify(WIFI_STATE_DISCONNECTED);
@@ -275,10 +280,15 @@ esp_err_t wifi_manager_start(app_config_t *cfg, wifi_state_cb_t cb, void *user_d
 
     ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
 
-    /* If no SSID configured, jump straight to AP mode */
+    /* If no SSID configured, start AP mode for provisioning (unless disabled) */
     if (strlen(cfg->wifi_ssid) == 0) {
-        ESP_LOGW(TAG, "No SSID configured, starting provisioning AP");
-        start_ap_mode();
+        if (cfg->wifi_ap_disabled) {
+            ESP_LOGE(TAG, "No SSID configured and AP mode disabled — cannot connect");
+            xEventGroupSetBits(s_wifi_eg, WIFI_FAIL_BIT);
+        } else {
+            ESP_LOGW(TAG, "No SSID configured, starting provisioning AP");
+            start_ap_mode();
+        }
     } else {
         start_sta_mode();
     }

@@ -13,6 +13,7 @@
 #        network_wrapper.c  — TLS via esp_tls (replaces direct mbedtls 2.x API)
 #        cipher_wrapper.c   — AES-GCM via PSA AEAD (mbedtls/cipher.h removed in mbedtls 4.x)
 #        cipher_wrapper.h   — replaces include/cipher_wrapper.h (removes mbedtls/cipher.h include)
+#        system_wrapper.c   — vTaskDelay instead of nanosleep (not in ESP-IDF newlib)
 #        mbedtls/certs.h    — empty shim (mbedtls/certs.h removed in mbedtls 3.x)
 #   4. Patches utils/log.h with an #ifndef guard for __FILENAME__
 #      (ESP-IDF's assert.h also defines it; -Werror treats the double-define as error)
@@ -44,6 +45,9 @@ cp "$DOCS_DIR/network_wrapper.c" "$SDK_DIR/platform/esp32/network_wrapper.c"
 
 echo "==> Writing platform/esp32/cipher_wrapper.c (PSA AEAD replacement)..."
 cp "$DOCS_DIR/cipher_wrapper.c" "$SDK_DIR/platform/esp32/cipher_wrapper.c"
+
+echo "==> Writing platform/esp32/system_wrapper.c (vTaskDelay instead of nanosleep)..."
+cp "$DOCS_DIR/system_wrapper.c" "$SDK_DIR/platform/esp32/system_wrapper.c"
 
 echo "==> Writing platform/esp32/cipher_wrapper.h (mbedtls/cipher.h shim)..."
 cp "$DOCS_DIR/cipher_wrapper.h" "$SDK_DIR/platform/esp32/cipher_wrapper.h"

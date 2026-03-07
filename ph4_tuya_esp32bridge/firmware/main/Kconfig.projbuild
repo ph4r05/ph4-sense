@@ -37,10 +37,21 @@ menu "PH4 Tuya ESP32 Bridge"
             string "Default WiFi password"
             default ""
 
+        config WIFI_DISABLE_AP
+            bool "Disable provisioning AP mode"
+            default n
+            help
+                When enabled, the device will never start the provisioning AP,
+                even if WiFi credentials are missing or STA connection fails.
+                Use this for deployed devices where the AP is not needed and
+                must not be exposed (security hardening).
+                Can be overridden at runtime via NVS (wifi.ap_disabled in JSON).
+
         config WIFI_AP_MODE_TIMEOUT_S
             int "AP provisioning mode timeout (seconds)"
             default 180
             range 30 3600
+            depends on !WIFI_DISABLE_AP
             help
                 Time to stay in AP mode waiting for provisioning.
                 After timeout, reboots and tries STA with saved credentials.

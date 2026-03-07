@@ -28,6 +28,7 @@ static const char *TAG = "config";
 #define K_SK_RESET_MASK     "sk_rst_mask"
 #define K_SK_RESET_MS       "sk_rst_ms"
 #define K_DEVICE_NAME       "dev_name"
+#define K_WIFI_AP_DISABLED  "wifi_ap_dis"
 
 /* Helper: read string from NVS, keep default if key missing */
 static void nvs_read_str(nvs_handle_t h, const char *key, char *dst, size_t max_len)
@@ -68,6 +69,7 @@ esp_err_t config_load(app_config_t *cfg)
     cfg->socket_count        = CONFIG_BRIDGE_SOCKET_COUNT;
     cfg->socket_auto_reset_ms = CONFIG_BRIDGE_SOCKET_AUTO_RESET_MS;
     cfg->socket_auto_reset_mask = 0xFFFF; /* all channels auto-reset by default */
+    cfg->wifi_ap_disabled = CONFIG_WIFI_DISABLE_AP;
 
     /* Override with NVS values */
     nvs_handle_t h;
@@ -101,6 +103,7 @@ esp_err_t config_load(app_config_t *cfg)
     if (nvs_get_u8 (h, K_SOCKET_COUNT, &u8)  == ESP_OK) cfg->socket_count = u8;
     if (nvs_get_u16(h, K_SK_RESET_MASK,&u16) == ESP_OK) cfg->socket_auto_reset_mask = u16;
     if (nvs_get_u32(h, K_SK_RESET_MS,  &u32) == ESP_OK) cfg->socket_auto_reset_ms = u32;
+    if (nvs_get_u8 (h, K_WIFI_AP_DISABLED, &u8) == ESP_OK) cfg->wifi_ap_disabled = (bool)u8;
 
     nvs_close(h);
     ESP_LOGI(TAG, "Config loaded from NVS");
@@ -127,11 +130,12 @@ esp_err_t config_save(const app_config_t *cfg)
     nvs_write_str(h, K_MQTT_PREFIX,  cfg->mqtt_topic_prefix);
     nvs_write_str(h, K_DEVICE_NAME,  cfg->device_name);
 
-    nvs_set_u16(h, K_MQTT_PORT,     cfg->mqtt_port);
-    nvs_set_u8 (h, K_SWITCH_COUNT,  cfg->switch_count);
-    nvs_set_u8 (h, K_SOCKET_COUNT,  cfg->socket_count);
-    nvs_set_u16(h, K_SK_RESET_MASK, cfg->socket_auto_reset_mask);
-    nvs_set_u32(h, K_SK_RESET_MS,   cfg->socket_auto_reset_ms);
+    nvs_set_u16(h, K_MQTT_PORT,       cfg->mqtt_port);
+    nvs_set_u8 (h, K_SWITCH_COUNT,    cfg->switch_count);
+    nvs_set_u8 (h, K_SOCKET_COUNT,    cfg->socket_count);
+    nvs_set_u16(h, K_SK_RESET_MASK,   cfg->socket_auto_reset_mask);
+    nvs_set_u32(h, K_SK_RESET_MS,     cfg->socket_auto_reset_ms);
+    nvs_set_u8 (h, K_WIFI_AP_DISABLED, (uint8_t)cfg->wifi_ap_disabled);
 
     err = nvs_commit(h);
     nvs_close(h);
@@ -188,6 +192,8 @@ esp_err_t config_apply_json(app_config_t *cfg, const char *json_str)
     if (wifi) {
         JSON_STR("ssid",       wifi_ssid);
         JSON_STR("passphrase", wifi_pass);
+        item = cJSON_GetObjectItemCaseSensitive(wifi, "ap_disabled");
+        if (cJSON_IsBool(item)) cfg->wifi_ap_disabled = cJSON_IsTrue(item);
     }
 
     /* Tuya */
@@ -246,8 +252,9 @@ char *config_to_json(const app_config_t *cfg)
     cJSON *root = cJSON_CreateObject();
 
     cJSON *wifi = cJSON_CreateObject();
-    cJSON_AddStringToObject(wifi, "ssid",       cfg->wifi_ssid);
-    cJSON_AddStringToObject(wifi, "passphrase", cfg->wifi_pass);
+    cJSON_AddStringToObject(wifi, "ssid",        cfg->wifi_ssid);
+    cJSON_AddStringToObject(wifi, "passphrase",  cfg->wifi_pass);
+    cJSON_AddBoolToObject  (wifi, "ap_disabled", cfg->wifi_ap_disabled);
     cJSON_AddItemToObject(root, "wifi", wifi);
 
     cJSON *tuya = cJSON_CreateObject();

@@ -16,6 +16,7 @@ typedef struct {
     /* WiFi */
     char wifi_ssid[CFG_MAX_SSID];
     char wifi_pass[CFG_MAX_PASSPHRASE];
+    bool wifi_ap_disabled;  /* when true: never start provisioning AP, even if STA fails */
 
     /* Tuya cloud credentials (can override Kconfig at runtime) */
     char tuya_pid[CFG_MAX_STR];
