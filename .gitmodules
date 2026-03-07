@@ -1,3 +1,0 @@
-[submodule "ph4_tuya_esp32bridge/firmware/components/tuya-iot-core-sdk"]
-	path = ph4_tuya_esp32bridge/firmware/components/tuya-iot-core-sdk
-	url = https://github.com/tuya/tuya-iot-core-sdk

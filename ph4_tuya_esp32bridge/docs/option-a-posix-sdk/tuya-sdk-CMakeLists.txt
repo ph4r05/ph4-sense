@@ -1,0 +1,79 @@
+# ESP-IDF component definition for tuya-iot-core-sdk.
+#
+# This file replaces the upstream standalone-project CMakeLists.txt so that
+# ESP-IDF can build the SDK as a regular component. It was written to work
+# with ESP-IDF v5.x (CMake >= 3.16, mbedtls 3.x).
+#
+# What is deliberately excluded:
+#   platform/posix/mbedtls_sockets_wrapper.c  -- already in ESP-IDF's mbedtls component
+#   platform/posix/storage_wrapper.c           -- replaced by platform/esp32/storage_wrapper.c
+#                                                 (NVS-backed, no filesystem required)
+#   libraries/mbedtls/**                        -- use ESP-IDF's mbedtls via REQUIRES
+
+cmake_minimum_required(VERSION 3.16)
+
+# Remove the Tuya SDK's bundled mbedtls before ESP-IDF's header scanner runs.
+# ESP-IDF errors when the same header (e.g. mbedtls/cipher.h) physically exists
+# in multiple component directories. We use ESP-IDF's built-in mbedtls component
+# (via REQUIRES mbedtls below), so the bundled copy is not needed.
+file(REMOVE_RECURSE "${CMAKE_CURRENT_SOURCE_DIR}/libraries/mbedtls")
+
+idf_component_register(
+    SRCS
+        # Tuya link SDK core
+        "src/tuyalink_core.c"
+        "src/cipher_wrapper.c"
+        "src/iotdns.c"
+        "src/tuya_endpoint.c"
+
+        # coreJSON (embedded JSON parser)
+        "libraries/coreJSON/source/core_json.c"
+
+        # coreMQTT -- used internally for Tuya cloud connection
+        # (separate from the ESP-MQTT component used for Home Assistant)
+        "libraries/coreMQTT/source/core_mqtt.c"
+        "libraries/coreMQTT/source/core_mqtt_state.c"
+        "libraries/coreMQTT/source/core_mqtt_serializer.c"
+
+        # coreHTTP -- used for OTA and Tuya API calls
+        "libraries/coreHTTP/source/core_http_client.c"
+        "libraries/coreHTTP/source/dependency/3rdparty/http_parser/http_parser.c"
+
+        # Middleware: Tuya MQTT + HTTP wrappers around coreMQTT / coreHTTP
+        "middleware/http_client_wrapper.c"
+        "middleware/mqtt_client_wrapper.c"
+
+        # Platform port
+        # network_wrapper.c -- TLS via mbedtls_net_* + lwIP sockets (POSIX on ESP32)
+        # system_wrapper.c  -- clock_gettime/gettimeofday/nanosleep (available in ESP-IDF)
+        # storage_wrapper.c -- NVS-backed ESP32 version (see platform/esp32/)
+        "platform/posix/network_wrapper.c"
+        "platform/posix/system_wrapper.c"
+        "platform/esp32/storage_wrapper.c"
+
+        # Utilities
+        "utils/MultiTimer.c"
+        "utils/base64.c"
+        "utils/cJSON.c"
+        "utils/log.c"
+
+    INCLUDE_DIRS
+        # platform/esp32 first: provides mbedtls/certs.h compatibility shim
+        # (mbedtls 3.x used by ESP-IDF 5.x removed certs.h)
+        "platform/esp32"
+        "include"
+        "interface"
+        "utils"
+        "libraries/coreJSON/source/include"
+        "libraries/coreMQTT/source/include"
+        "libraries/coreHTTP/source/include"
+        "libraries/coreHTTP/source/dependency/3rdparty/http_parser"
+        "middleware"
+        "platform/posix"
+
+    REQUIRES
+        mbedtls
+        nvs_flash
+        lwip
+        esp_timer
+)
