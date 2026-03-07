@@ -6,8 +6,12 @@
 #
 # What is deliberately excluded:
 #   platform/posix/mbedtls_sockets_wrapper.c  -- already in ESP-IDF's mbedtls component
+#   platform/posix/network_wrapper.c           -- replaced by platform/esp32/network_wrapper.c
+#                                                 (esp_tls based; no direct mbedtls 2.x API usage)
 #   platform/posix/storage_wrapper.c           -- replaced by platform/esp32/storage_wrapper.c
 #                                                 (NVS-backed, no filesystem required)
+#   src/cipher_wrapper.c                       -- replaced by platform/esp32/cipher_wrapper.c
+#                                                 (mbedtls/cipher.h removed in mbedtls 4.x; uses PSA AEAD)
 #   libraries/mbedtls/**                        -- use ESP-IDF's mbedtls via REQUIRES
 
 cmake_minimum_required(VERSION 3.16)
@@ -22,7 +26,7 @@ idf_component_register(
     SRCS
         # Tuya link SDK core
         "src/tuyalink_core.c"
-        "src/cipher_wrapper.c"
+        # src/cipher_wrapper.c replaced by platform/esp32/cipher_wrapper.c below
         "src/iotdns.c"
         "src/tuya_endpoint.c"
 
@@ -43,11 +47,13 @@ idf_component_register(
         "middleware/http_client_wrapper.c"
         "middleware/mqtt_client_wrapper.c"
 
-        # Platform port
-        # network_wrapper.c -- TLS via mbedtls_net_* + lwIP sockets (POSIX on ESP32)
+        # Platform port (all ESP32-native replacements)
+        # network_wrapper.c -- TLS via esp_tls (no direct mbedtls API)
+        # cipher_wrapper.c  -- AEAD via PSA Crypto (mbedtls/cipher.h removed in mbedtls 4.x)
         # system_wrapper.c  -- clock_gettime/gettimeofday/nanosleep (available in ESP-IDF)
-        # storage_wrapper.c -- NVS-backed ESP32 version (see platform/esp32/)
-        "platform/posix/network_wrapper.c"
+        # storage_wrapper.c -- NVS-backed ESP32 version
+        "platform/esp32/network_wrapper.c"
+        "platform/esp32/cipher_wrapper.c"
         "platform/posix/system_wrapper.c"
         "platform/esp32/storage_wrapper.c"
 
@@ -72,8 +78,16 @@ idf_component_register(
         "platform/posix"
 
     REQUIRES
+        esp-tls
         mbedtls
         nvs_flash
         lwip
         esp_timer
+)
+
+# coreJSON uses `true` as an enum constant (e.g. `true = 1`), which is illegal
+# in C23 (where `true` is a keyword). Force C11 for that file only.
+set_source_files_properties(
+    "${CMAKE_CURRENT_SOURCE_DIR}/libraries/coreJSON/source/core_json.c"
+    PROPERTIES COMPILE_FLAGS "-std=c11"
 )

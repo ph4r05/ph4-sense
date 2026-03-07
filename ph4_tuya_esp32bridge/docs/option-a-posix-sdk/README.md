@@ -1,70 +1,83 @@
-# Option A: tuya-iot-core-sdk (POSIX/mbedtls approach) — ABANDONED
+# Option A: tuya-iot-core-sdk + ESP32 platform layer — CURRENT APPROACH
 
-## Why it was attempted
+## Overview
 
 The `tuya-iot-core-sdk` (https://github.com/tuya/tuya-iot-core-sdk) is Tuya's
 portable C SDK, designed to run on Linux/POSIX systems. It uses a platform
-abstraction layer (PAL) so theoretically it can run on any OS by implementing
-a handful of wrapper functions.
+abstraction layer (PAL) so it can run on any OS by implementing a handful of
+wrapper functions.
 
-The approach was to compile it as an ESP-IDF component by:
+The approach is to compile it as an ESP-IDF component by:
 1. Overriding the upstream `CMakeLists.txt` with an IDF `idf_component_register()` definition
 2. Replacing the POSIX filesystem storage with an NVS-backed wrapper
-3. Using ESP-IDF's built-in mbedtls instead of the SDK's bundled copy
-4. Using the POSIX network_wrapper.c as-is (lwIP provides POSIX sockets on ESP32)
+3. Replacing the POSIX/mbedtls network wrapper with an `esp_tls`-based wrapper
+4. Using `platform/posix/system_wrapper.c` as-is (clock_gettime/nanosleep work on ESP-IDF)
 
-## Why it was abandoned
+## Problems encountered and how they were fixed
 
-The `tuya-iot-core-sdk` was written for **mbedtls 2.x**. ESP-IDF 5.0+ uses
-**mbedtls 3.x**, which made breaking API changes:
+| Problem | Fix |
+|---------|-----|
+| `cmake_minimum_required(VERSION 3.2.0)` — CMake 4.x dropped <3.5 | Replaced entire CMakeLists.txt with `idf_component_register()` wrapper |
+| `libraries/mbedtls/` bundled — conflicts with openthread's bundled mbedtls headers | `file(REMOVE_RECURSE)` at configure time |
+| `platform/posix/storage_wrapper.c` uses `fopen/fwrite` — no filesystem on ESP32 | `platform/esp32/storage_wrapper.c` using NVS |
+| `mbedtls/certs.h` not found — removed in mbedtls 3.x | Empty shim at `platform/esp32/mbedtls/certs.h` |
+| `platform/posix/network_wrapper.c` uses mbedtls 2.x struct internals (`ssl.state`, `mbedtls_ssl_conf_rng`) — broken in mbedtls 3.x / ESP-IDF 5+ | `platform/esp32/network_wrapper.c` using `esp_tls` — no direct mbedtls API |
+| `mbedtls/cipher.h` not found — entire cipher API removed from public API in mbedtls 4.x / ESP-IDF 6.x (moved to PSA Crypto) | `platform/esp32/cipher_wrapper.h` + `platform/esp32/cipher_wrapper.c` using PSA AEAD API |
+| coreJSON uses `true` as enum constant — illegal in C23 | `set_source_files_properties` with `-std=c11` for `core_json.c` |
+| `__FILENAME__` macro redefined — defined in both `utils/log.h` and ESP-IDF's `assert.h` | `#ifndef __FILENAME__` guard added to `utils/log.h` |
 
-| Issue | Details |
-|-------|---------|
-| `mbedtls_ssl_context.state` removed | Struct members made private/opaque in mbedtls 3.0 |
-| `mbedtls_ssl_conf_rng()` changed | PSA Crypto integration changed RNG API in 3.6+ |
-| `mbedtls/certs.h` removed | Removed in mbedtls 3.0 |
-| `coreJSON true` enum conflict | coreJSON uses `true` as an enum constant, illegal in C23 |
-| `__FILENAME__` macro redefined | Conflicts with ESP-IDF's assert.h |
-
-**There is no ESP-IDF version that supports both ESP32-C6 (requires ESP-IDF 5.0+)
-and mbedtls 2.x (requires ESP-IDF 4.x).** Downgrading is not an option.
-
-## What was built before abandoning
-
-### New files created in the submodule
+## Files changed / created
 
 ```
 firmware/components/tuya-iot-core-sdk/
-├── CMakeLists.txt                    ← REPLACED: idf_component_register() wrapper
-├── platform/
-│   └── esp32/
-│       ├── storage_wrapper.c         ← NEW: NVS-backed storage (replaces fopen/fwrite)
-│       └── mbedtls/
-│           └── certs.h               ← NEW: empty shim (mbedtls/certs.h removed in 3.x)
+├── CMakeLists.txt                      ← REPLACED: idf_component_register() wrapper
+├── utils/
+│   └── log.h                           ← PATCHED: #ifndef __FILENAME__ guard
+└── platform/
+    └── esp32/
+        ├── network_wrapper.c           ← NEW: TLS via esp_tls (replaces posix/network_wrapper.c)
+        ├── cipher_wrapper.c            ← NEW: AES-GCM via PSA AEAD (replaces src/cipher_wrapper.c)
+        ├── cipher_wrapper.h            ← NEW: shadows include/cipher_wrapper.h (no mbedtls/cipher.h)
+        ├── storage_wrapper.c           ← NEW: NVS-backed storage (replaces fopen/fwrite)
+        └── mbedtls/
+            └── certs.h                 ← NEW: empty shim (mbedtls/certs.h removed in 3.x)
 ```
 
-### Changes to the overridden CMakeLists.txt
+## CMakeLists.txt highlights
 
 - Calls `idf_component_register()` instead of CMake `project()`
 - Sources: all of src/, coreJSON, coreMQTT, coreHTTP, middleware/, utils/
-- Excludes: `mbedtls_sockets_wrapper.c` (duplicate symbols with ESP-IDF mbedtls),
-            `platform/posix/storage_wrapper.c` (replaced), `libraries/mbedtls/`
-- Adds `file(REMOVE_RECURSE libraries/mbedtls)` at configure time to prevent
-  ESP-IDF's header scanner from flagging mbedtls/cipher.h as ambiguous
-  (same header physically exists in openthread's bundled copy too)
-- `REQUIRES mbedtls nvs_flash lwip esp_timer`
+- Excludes: `mbedtls_sockets_wrapper.c`, `platform/posix/network_wrapper.c`,
+            `platform/posix/storage_wrapper.c`, `libraries/mbedtls/`
+- Adds `file(REMOVE_RECURSE libraries/mbedtls)` at configure time
+- `REQUIRES esp_tls nvs_flash lwip esp_timer`
+- `set_source_files_properties(core_json.c PROPERTIES COMPILE_FLAGS "-std=c11")`
 
-### The NVS storage wrapper (`platform/esp32/storage_wrapper.c`)
+## ESP32 network wrapper (`platform/esp32/network_wrapper.c`)
+
+Implements the same `NetworkContext_t` interface as the POSIX version but uses
+`esp_tls` instead of direct mbedtls API calls:
+
+- `network_tls_init` — allocates `tls_context_t`, sets function pointers
+- `network_tls_connect` — calls `esp_tls_init` + `esp_tls_conn_new_sync`
+- `network_tls_read/write` — call `esp_tls_conn_read/write`; map WANT_READ/TIMEOUT → 0
+- `network_tls_disconnect/destroy` — call `esp_tls_conn_destroy`; free context
+
+No mbedtls headers included. Compatible with ESP-IDF 5.x and 6.x regardless
+of underlying mbedtls version.
+
+## NVS storage wrapper (`platform/esp32/storage_wrapper.c`)
 
 Implements `local_storage_set/get/del` from `storage_interface.h` using
 `nvs_open/nvs_set_blob/nvs_get_blob` in the `tuya_kv` NVS namespace.
 NVS keys are truncated to 15 chars (NVS limit). Tuya SDK's internal key
-names (devid, seckey, localkey, etc.) are all short enough.
+names (devid, seckey, localkey, etc.) are all within this limit.
 
-### firmware/main/tuya_cloud.c API surface (compatible with option B)
+## `firmware/main/tuya_cloud.c` API surface
 
-The public interface is clean and SDK-agnostic enough that it can be reimplemented
-for a different Tuya SDK without changing any other files:
+The public interface is SDK-agnostic. Only `tuya_cloud.c` needs to change if
+the Tuya SDK is ever swapped. The header `tuya_cloud.h` and all callers
+(`dp_bridge.c`, `main.c`) remain unchanged.
 
 ```c
 esp_err_t tuya_cloud_init(cfg, dp_cb, state_cb, user_data);
@@ -77,9 +90,6 @@ void tuya_cloud_factory_reset(void);
 void tuya_cloud_stop(void);
 ```
 
-Only `tuya_cloud.c` needs to change between options. The public header
-`tuya_cloud.h` and all callers (`dp_bridge.c`, `main.c`) remain unchanged.
-
-## How to restore Option A from a clean checkout
+## How to restore from a clean checkout
 
 Run `docs/option-a-posix-sdk/restore.sh` from the repository root.
