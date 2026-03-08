@@ -12,12 +12,16 @@ from the Tuya IoT Platform developer console) and bridges bidirectionally:
 
 ## DP Layout
 
-| Channel type | Count | Tuya DP IDs      | MQTT topic                     |
-|--------------|-------|------------------|-------------------------------|
-| Switch       | 1–16  | DP 1 .. 16       | `{prefix}/switch/{n}/set` / `state` |
-| Socket       | 1–16  | DP 101 .. 116    | `{prefix}/socket/{n}/set` / `state` |
+| Channel type  | Count | Tuya DP IDs   | Tuya Property Name                    | MQTT topic                              |
+|---------------|-------|---------------|---------------------------------------|-----------------------------------------|
+| Switch        | 1–16  | DP 101 .. 116 | `switch_1` .. `switch_16`             | `{prefix}/switch/{n}/set` / `state`     |
+| Relay/Socket  | 1–16  | DP 117 .. 132 | `relay_status_1` .. `relay_status_16` | `{prefix}/socket/{n}/set` / `state`     |
 
 Default prefix: `ph4/bridge`
+
+> The Tuya property names (`switch_N`, `relay_status_N`) must be defined in your
+> TuyaLink product's data model with type **Boolean** and mode **R/W**.
+> DP ID bases are configurable via `idf.py menuconfig` → Bridge Channels.
 
 ### Switch (HA controls Tuya)
 

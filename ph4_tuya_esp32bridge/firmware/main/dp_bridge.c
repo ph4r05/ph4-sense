@@ -17,10 +17,10 @@ static const char *TAG = "dp_bridge";
 /* ------------------------------------------------------------------ */
 /* DP layout                                                            */
 /* ------------------------------------------------------------------ */
-#define SWITCH_DP(ch)   ((uint8_t)((ch)))                        /* ch 1-based -> DP 1..16  */
-#define SOCKET_DP(ch)   ((uint8_t)(CONFIG_BRIDGE_SOCKET_DP_BASE + (ch) - 1))  /* ch 1-based -> DP 101..116 */
-#define DP_TO_SWITCH(dp) ((int)(dp))                             /* 1-based channel or 0    */
-#define DP_TO_SOCKET(dp) ((int)((dp) - CONFIG_BRIDGE_SOCKET_DP_BASE + 1))     /* 1-based channel or 0    */
+#define SWITCH_DP(ch)    ((uint8_t)(CONFIG_BRIDGE_SWITCH_DP_BASE + (ch) - 1)) /* ch 1-based -> DP 101..116 */
+#define SOCKET_DP(ch)    ((uint8_t)(CONFIG_BRIDGE_SOCKET_DP_BASE + (ch) - 1)) /* ch 1-based -> DP 117..132 */
+#define DP_TO_SWITCH(dp) ((int)((dp) - CONFIG_BRIDGE_SWITCH_DP_BASE + 1))     /* 1-based channel */
+#define DP_TO_SOCKET(dp) ((int)((dp) - CONFIG_BRIDGE_SOCKET_DP_BASE + 1))     /* 1-based channel */
 
 /* ------------------------------------------------------------------ */
 /* Auto-reset timer state per socket channel                           */
@@ -273,10 +273,13 @@ esp_err_t dp_bridge_init(const app_config_t *cfg)
 
     ESP_LOGI(TAG, "Bridge initialized: %d switch + %d socket channels",
              cfg->switch_count, cfg->socket_count);
-    ESP_LOGI(TAG, "Switch DPs: 1..%d   Socket DPs: %d..%d",
+    ESP_LOGI(TAG, "Switch DPs: %d..%d (switch_1..switch_%d)   Relay DPs: %d..%d (relay_status_1..relay_status_%d)",
+             CONFIG_BRIDGE_SWITCH_DP_BASE,
+             CONFIG_BRIDGE_SWITCH_DP_BASE + cfg->switch_count - 1,
              cfg->switch_count,
              CONFIG_BRIDGE_SOCKET_DP_BASE,
-             CONFIG_BRIDGE_SOCKET_DP_BASE + cfg->socket_count - 1);
+             CONFIG_BRIDGE_SOCKET_DP_BASE + cfg->socket_count - 1,
+             cfg->socket_count);
     ESP_LOGI(TAG, "Socket auto-reset: %d ms, mask=0x%04X",
              (int)cfg->socket_auto_reset_ms,
              cfg->socket_auto_reset_mask);

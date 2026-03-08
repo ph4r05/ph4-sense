@@ -61,7 +61,7 @@ static const app_config_t  *s_cfg         = NULL;
 static char s_device_id[CFG_MAX_STR];
 
 /* Shadow state for all DPs — allows tuya_cloud_report_all() on reconnect */
-#define DP_SWITCH_BASE   1
+#define DP_SWITCH_BASE   CONFIG_BRIDGE_SWITCH_DP_BASE
 #define DP_SOCKET_BASE   CONFIG_BRIDGE_SOCKET_DP_BASE
 
 static bool s_switch_state[CFG_SWITCH_COUNT_MAX] = {false};
@@ -77,10 +77,19 @@ static void set_state(tuya_state_t new_state)
     if (s_state_cb) s_state_cb(new_state, s_user_data);
 }
 
-/* Convert dp_id to TuyaLink property name: 1 → "dp_1", 101 → "dp_101" */
+/* Convert dp_id to TuyaLink property name:
+ *   101..116 → "switch_1".."switch_16"
+ *   117..132 → "relay_status_1".."relay_status_16" */
 static void dp_id_to_prop(uint8_t dp_id, char *buf, size_t len)
 {
-    snprintf(buf, len, "dp_%d", (int)dp_id);
+    int sw_idx = dp_id - DP_SWITCH_BASE;
+    int sk_idx = dp_id - DP_SOCKET_BASE;
+    if (sw_idx >= 0 && sw_idx < CFG_SWITCH_COUNT_MAX)
+        snprintf(buf, len, "switch_%d", sw_idx + 1);
+    else if (sk_idx >= 0 && sk_idx < CFG_SOCKET_COUNT_MAX)
+        snprintf(buf, len, "relay_status_%d", sk_idx + 1);
+    else
+        snprintf(buf, len, "dp_%d", (int)dp_id);  /* fallback */
 }
 
 /* ------------------------------------------------------------------ */
@@ -123,16 +132,30 @@ static void on_messages(tuya_mqtt_context_t *context, void *user_data,
     cJSON *prop;
     cJSON_ArrayForEach(prop, root) {
         const char *key = prop->string;
-        if (!key || strncmp(key, "dp_", 3) != 0) continue;
+        if (!key) continue;
 
-        int dp_id = atoi(key + 3);
-        if (dp_id <= 0) continue;
+        /* Resolve property name to dp_id:
+         *   "switch_N"        → DP_SWITCH_BASE + N - 1
+         *   "relay_status_N"  → DP_SOCKET_BASE + N - 1
+         */
+        int dp_id = 0;
+        int ch = 0;
+        if (strncmp(key, "switch_", 7) == 0) {
+            ch = atoi(key + 7);
+            if (ch >= 1 && ch <= CFG_SWITCH_COUNT_MAX)
+                dp_id = DP_SWITCH_BASE + ch - 1;
+        } else if (strncmp(key, "relay_status_", 13) == 0) {
+            ch = atoi(key + 13);
+            if (ch >= 1 && ch <= CFG_SOCKET_COUNT_MAX)
+                dp_id = DP_SOCKET_BASE + ch - 1;
+        }
+        if (dp_id == 0) continue;
 
         cJSON *val_obj = cJSON_GetObjectItemCaseSensitive(prop, "value");
         if (!val_obj) continue;
         bool value = cJSON_IsTrue(val_obj);
 
-        ESP_LOGI(TAG, "DP %d = %s", dp_id, value ? "true" : "false");
+        ESP_LOGI(TAG, "Property '%s' (DP %d) = %s", key, dp_id, value ? "true" : "false");
 
         /* Update shadow */
         int switch_idx = dp_id - DP_SWITCH_BASE;

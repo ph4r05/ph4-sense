@@ -105,23 +105,31 @@ menu "PH4 Tuya ESP32 Bridge"
             default 16
             range 1 16
             help
-                Mapped to Tuya DPs 1..N.
+                Mapped to Tuya DPs BRIDGE_SWITCH_DP_BASE..+N-1 (property names switch_1..switch_N).
                 HA sets state, Tuya/SmartLife reflects it.
 
         config BRIDGE_SOCKET_COUNT
-            int "Number of socket channels (Tuya -> HA)"
+            int "Number of socket/relay channels (Tuya -> HA)"
             default 16
             range 1 16
             help
-                Mapped to Tuya DPs 101..101+N-1.
+                Mapped to relay_status_1..relay_status_N (Tuya DP BRIDGE_SOCKET_DP_BASE..+N-1).
                 SmartLife triggers state, ESP32 forwards to HA via MQTT.
 
-        config BRIDGE_SOCKET_DP_BASE
-            int "Tuya DP base for socket channels"
+        config BRIDGE_SWITCH_DP_BASE
+            int "Tuya DP base for switch channels"
             default 101
             help
-                First DP ID used for socket channels.
-                Switch channels always use DP 1..BRIDGE_SWITCH_COUNT.
+                First DP ID for switch channels (HA→Tuya).
+                Maps to Tuya property names: switch_1, switch_2, ...
+
+        config BRIDGE_SOCKET_DP_BASE
+            int "Tuya DP base for relay/socket channels"
+            default 117
+            help
+                First DP ID for relay status channels (Tuya→HA).
+                Maps to Tuya property names: relay_status_1, relay_status_2, ...
+                Default 117 = BRIDGE_SWITCH_DP_BASE(101) + 16 switch channels.
 
         config BRIDGE_SOCKET_AUTO_RESET_MS
             int "Socket auto-reset delay (ms), 0=disabled"
