@@ -6,7 +6,7 @@
   "tuya": {
     "pid":      "YOUR_PRODUCT_ID",
     "uuid":     "YOUR_DEVICE_UUID_20CHARS",
-    "auth_key": "YOUR_DEVICE_AUTH_KEY_32CHARS",
+    "auth_key": "YOUR16CHARKEY",
     "host":     "m1.tuyaeu.com"
   },
   "_tuya_regions": "CN=m1.tuyacn.com  EU=m1.tuyaeu.com  US=m1.tuyaus.com  IN=m1.tuyain.com",

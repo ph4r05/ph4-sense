@@ -47,14 +47,38 @@ ph4/bridge/socket/5/state  -> OFF
 
 ## Prerequisite: Tuya Developer Setup
 
-### 1. Create a Product
+> **Critical:** This firmware uses the **TuyaLink SDK**. You MUST create a **TuyaLink-type**
+> product. Hardware module products (e.g. T1-U-HL, WB3S, etc.) use a different protocol and
+> their credentials will be rejected by the TuyaLink MQTT broker with error 11
+> "Connection not authorized". Virtual devices also do not work for physical hardware auth.
 
-1. Go to [iot.tuya.com](https://iot.tuya.com) → **Cloud** → **Development**
+### 0. Account region / Data Center
+
+When you first sign up on the Tuya IoT Platform the default data center is **China**.
+If your devices are in Europe you must set the data center to **Central Europe** or
+**Western Europe** during project/product creation. The MQTT broker host differs by region:
+
+| Data Center | MQTT Host |
+|---|---|
+| China | `m1.tuyacn.com` |
+| Central/Western Europe | `m1.tuyaeu.com` |
+| Eastern/Western America | `m1.tuyaus.com` |
+| India | `m1.tuyain.com` |
+
+Set the correct host in `idf.py menuconfig` → **PH4 Tuya ESP32 Bridge** → **Tuya Cloud** →
+**Tuya MQTT broker host**, or at runtime via the `tuya.host` JSON field.
+
+### 1. Create a TuyaLink Product
+
+1. Go to [iot.tuya.com](https://iot.tuya.com) (or your regional console) → **Cloud** → **Development**
 2. Click **Create Product**
-3. Choose category: **Electrical** → **Scene Panel Switch** (or Custom)
-4. Name it (e.g. "ph4-bridge")
-5. Select **Standard Instruction Set** or **Custom**
-6. The **Product ID (PID)** is shown immediately — copy it now. You do **not** need to release the product.
+3. Choose any category (e.g. **Electrical** → **Scene Panel Switch**)
+4. **On the protocol/solution screen**, select **TuyaLink** (NOT a hardware module like
+   T1-U-HL, WB3S, etc.). This is critical — hardware module products use a different
+   protocol and their credentials are incompatible with this firmware.
+5. Set the data center to your region (e.g. **Central Europe Data Center**)
+6. Name the product (e.g. "ph4-bridge") and confirm
+7. Copy the **Product ID (PID)** shown in the product overview
 
 ### 2. Define Properties (TuyaLink data model)
 
@@ -69,17 +93,21 @@ not integer DP ID. In your product's data model, add Boolean properties named **
 > **Why `dp_N`?** The firmware maps its internal DP ID (integer) to the property name
 > `dp_{id}`. This convention must match what you define in the Tuya IoT Platform product schema.
 
-### 3. Get Device Credentials
+### 3. Get Device Credentials (Device access authorization code)
 
-This firmware uses the **TuyaLink SDK** which requires **pre-provisioned credentials**.
-There is no EZ/AP SmartLife pairing flow — the device cannot be added via the SmartLife
-"Add Device" UI. Credentials must be obtained from the developer console before flashing.
+This firmware requires **pre-provisioned credentials** — there is no SmartLife pairing flow.
+Credentials come from **registering a device** under the product:
 
-1. In the Tuya console go to your project → **Devices** → **Add Test Device**
-   (or **Cloud** → **Development** → your project → **Devices** tab)
-2. Click **Add Device** → fill in a device name → confirm
-3. Copy the **Device ID** (= UUID, 20 chars) and **Device Secret** (= AuthKey, 32 chars)
-4. Set them in your config alongside the PID (see provisioning steps below)
+1. In the Tuya console → your product → **Device Management** → **Register Device**
+2. Select **"Device access authorization code"** (this is the TuyaLink credential type)
+3. Register one device → you receive:
+   - **Device ID** (UUID, 20 chars, starts with `uuid...`)
+   - **Device Secret** (AuthKey, 16 chars for TuyaLink virtual/registered devices)
+4. Copy both values and set them in your config (see provisioning steps below)
+
+> **Note:** The TuyaLink SDK uses only 16 chars for the HMAC key. TuyaLink device secrets
+> are 16 chars. Hardware license AuthKeys (32 chars) are for a different SDK and
+> will not authenticate correctly.
 
 ---
 
