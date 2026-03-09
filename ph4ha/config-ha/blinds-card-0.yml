@@ -25,6 +25,9 @@ entities:
   - entity: scene.blinds_all_down
     show_icon: true
     show_name: true
+  - entity: scene.blinds_all_window_down
+    show_icon: true
+    show_name: true
   - entity: scene.blinds_all_down_open
     show_icon: true
     show_name: true
@@ -52,6 +55,9 @@ entities:
   - entity: scene.blinds_living_morning_tilt
     show_icon: true
     show_name: true
+  - entity: scene.blinds_all_window_privacy
+    show_icon: true
+    show_name: true
   - entity: scene.blinds_living_privacy
     show_icon: true
     show_name: true
@@ -61,6 +67,9 @@ entities:
   - entity: scene.blinds_morning_context
     show_icon: true
     show_name: true
+  - entity: scene.blinds_early_morning_context
+    show_icon: true
+    show_name: true
   - entity: scene.blinds_tilt_close
     show_icon: true
     show_name: true
@@ -68,6 +77,9 @@ entities:
     show_icon: true
     show_name: true
   - entity: scene.blinds_vent
+    show_icon: true
+    show_name: true
+  - entity: scene.blinds_vent_window
     show_icon: true
     show_name: true
   - entity: scene.blinds_vent_bedroom

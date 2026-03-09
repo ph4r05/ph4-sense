@@ -14,12 +14,19 @@
       data:
         value: "{{ trigger.json.state }}"
 
-- alias: Button 1 Short Click - Activate Blinds Vent Scene
-  trigger:
-    platform: state
-    entity_id: sensor.switch4bed_switch4bed_action
-    to: "1_single"
-  action:
-    service: scene.turn_on
-    target:
+- id: button_1_short_click_activate_blinds_vent_scene
+  alias: Button 1 Short Click - Activate Blinds Vent Scene
+  description: ''
+  triggers:
+  - entity_id:
+    - sensor.switch4bed_switch4bed_action
+    to: 1_single
+    trigger: state
+  - platform: mqtt
+    topic: "zigbee2mqtt/switch4bed/action"
+    payload: "1_single"
+  actions:
+  - target:
       entity_id: scene.blinds_vent_bedroom
+    action: scene.turn_on
+    data: {}

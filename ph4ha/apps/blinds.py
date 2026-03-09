@@ -33,6 +33,7 @@ class Blinds(hass.Hass):
     BLIND_STUDY = "Study"
     BLIND_SKLAD = "Sklad"
     ALL_BLINDS = [BLIND_LIV_BIG, BLIND_LIV_DOOR, BLIND_BEDROOM, BLIND_STUDY, BLIND_SKLAD]
+    ALL_WINDOW_BLINDS = [BLIND_LIV_BIG, BLIND_BEDROOM, BLIND_STUDY, BLIND_SKLAD]
     OPEN_HALF = 0.9
     OPEN_PRIVACY = 0.7
     DEFAULT_RECENT_WINDOW = datetime.timedelta(hours=4)
@@ -591,6 +592,7 @@ class Blinds(hass.Hass):
             self.handle_scene(scene)
 
     def handle_scene(self, scene_id):
+        has_window = "_window" in scene_id
         if scene_id == "scene.blinds_vent":
             self.handle_vent()
         elif scene_id == "scene.blinds_vent_bedroom":
@@ -609,6 +611,10 @@ class Blinds(hass.Hass):
             self.blinds_all_up()
         elif scene_id == "scene.blinds_all_down":
             self.blinds_all_down()
+        elif scene_id == "scene.blinds_all_window_down":
+            self.blinds_all_window_down()
+        elif scene_id == "scene.blinds_all_window_privacy":
+            self.blinds_all_window_privacy()
         elif scene_id == "scene.blinds_tilt_open":
             self.blinds_tilt_open()
         elif scene_id == "scene.blinds_tilt_close":
@@ -621,29 +627,34 @@ class Blinds(hass.Hass):
             self.blinds_morning()
         elif scene_id == "scene.blinds_morning_context":
             self.blinds_morning_context()
+        elif scene_id == "scene.blinds_early_morning_context":
+            self.blinds_morning_context(early=True)
         elif scene_id == "scene.blinds_living_down_close":
             self.blinds_living_down_close()
         elif scene_id == "scene.blinds_living_down_open":
             self.blinds_living_down_open()
         elif scene_id == "scene.blinds_living_down_privacy":
             self.blinds_living_down_privacy()
+        elif scene_id.startswith("scene.blinds_vent_window"):
+            self.blinds_vent_window_privacy()
         elif scene_id.startswith("scene.blinds_vent_"):
-            self.handle_scene_template(scene_id, 0, self.OPEN_HALF)
+            self.handle_scene_template(scene_id, has_window, 0, self.OPEN_HALF)
         elif scene_id.startswith("scene.blinds_close_"):
-            self.handle_scene_template(scene_id, 0, 0)
+            self.handle_scene_template(scene_id, has_window, 0, 0)
         elif scene_id.startswith("scene.blinds_open_"):
-            self.handle_scene_template(scene_id, 100, 0)
+            self.handle_scene_template(scene_id, has_window, 100, 0)
         elif scene_id.startswith("scene.blinds_tilt_open_"):
-            self.handle_scene_template(scene_id, None, self.OPEN_HALF)
+            self.handle_scene_template(scene_id, has_window, None, self.OPEN_HALF)
         elif scene_id.startswith("scene.blinds_tilt_close_"):
-            self.handle_scene_template(scene_id, None, 0)
+            self.handle_scene_template(scene_id, has_window, None, 0)
         else:
             self.log(f"Scene {scene_id} not found")
 
-    def handle_scene_template(self, scene_id, pos: Optional[float], tilt: Optional[float]):
-        for bld in self.ALL_BLINDS:
+    def handle_scene_template(self, scene_id, has_window: bool, pos: Optional[float], tilt: Optional[float]):
+        blind_set = self.ALL_WINDOW_BLINDS if has_window else self.ALL_BLINDS
+        for bld in blind_set:
             bld_low = bld.lower()
-            if scene_id.endswith(f"_{bld_low}"):
+            if has_window or scene_id.endswith(f"_{bld_low}"):
                 self.blind_move(bld, pos, tilt)
 
     def handle_vent(self):
@@ -691,6 +702,24 @@ class Blinds(hass.Hass):
         self.blinds_pos_tilt(self.BLIND_SKLAD, 0, 0)
         self.blinds_pos_tilt(self.BLIND_STUDY, 0, 0)
 
+    def blinds_all_window_down(self):
+        self.blinds_pos_tilt(self.BLIND_LIV_BIG, 0, 0)
+        self.blinds_pos_tilt(self.BLIND_BEDROOM, 0, 0)
+        self.blinds_pos_tilt(self.BLIND_SKLAD, 0, 0)
+        self.blinds_pos_tilt(self.BLIND_STUDY, 0, 0)
+
+    def blinds_all_window_privacy(self):
+        self.blinds_pos_tilt(self.BLIND_LIV_BIG, 0, self.OPEN_PRIVACY)
+        self.blinds_pos_tilt(self.BLIND_BEDROOM, 0, 0)
+        self.blinds_pos_tilt(self.BLIND_SKLAD, 0, 0)
+        self.blinds_pos_tilt(self.BLIND_STUDY, 0, 0)
+
+    def blinds_vent_window_privacy(self):
+        self.blinds_tilt(self.BLIND_LIV_BIG, self.OPEN_HALF)
+        self.blinds_tilt(self.BLIND_BEDROOM, self.OPEN_HALF)
+        self.blinds_tilt(self.BLIND_SKLAD, self.OPEN_HALF)
+        self.blinds_tilt(self.BLIND_STUDY, self.OPEN_HALF)
+
     def blinds_tilt_open(self):
         self.blinds_tilt(self.BLIND_LIV_BIG, self.OPEN_HALF)
         self.blinds_tilt(self.BLIND_LIV_DOOR, self.OPEN_HALF)
@@ -727,7 +756,7 @@ class Blinds(hass.Hass):
         if not self.guest_mode:
             self.blinds_pos_tilt(self.BLIND_SKLAD, 0, self.OPEN_HALF)
 
-    def blinds_morning_context(self):
+    def blinds_morning_context(self, early: bool = False):
         if not self.automation_enabled:
             self.log("Automation disabled")
             return
@@ -740,7 +769,7 @@ class Blinds(hass.Hass):
         if not self.guest_mode:
             self.blinds_pos_tilt(self.BLIND_SKLAD, 0, self.OPEN_HALF)
 
-        if self.bedroom_automation_enabled:
+        if self.bedroom_automation_enabled and not early:
             self.blinds_pos_tilt(self.BLIND_BEDROOM, 100, 0)
 
     def blinds_morning_context_automated(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
@@ -828,13 +857,17 @@ class Blinds(hass.Hass):
         return self.blinds_req(blind, data)
 
     def blinds_req(self, blind, data):
-        blind_rec = self.blinds[blind]
-        blind_host = blind_rec["ip_address"]
-        response = requests.post(
-            f"http://{blind_host}/rpc", data=json.dumps(data), headers={"Content-Type": "application/json"}
-        )
-        self.log(f"Req: {blind_host}, data: {json.dumps(data)}, response: {response}")
-        return response
+        try:
+            blind_rec = self.blinds[blind]
+            blind_host = blind_rec["ip_address"]
+            response = requests.post(
+                f"http://{blind_host}/rpc", data=json.dumps(data), headers={"Content-Type": "application/json"}
+            )
+            self.log(f"Req: {blind_host}, data: {json.dumps(data)}, response: {response}")
+            return response
+        except Exception as e:
+            self.log(f"Exception in setting blind: {blind} @ {blind_host}, data: {data}, exc: {e}")
+            return None
 
     def to_bool(self, inp):
         return inp == "on"
