@@ -1,0 +1,156 @@
+type: vertical-stack
+cards:
+  - type: markdown
+    content: |
+      ## Blinds
+      Daily scenes first, less-used actions below.
+  - type: grid
+    columns: 3
+    square: false
+    cards:
+      - type: button
+        entity: scene.blinds_morning
+        name: Morning
+        tap_action:
+          action: call-service
+          service: scene.turn_on
+          target:
+            entity_id: scene.blinds_morning
+      - type: button
+        entity: scene.blinds_morning_context
+        name: Morning ctx
+        tap_action:
+          action: call-service
+          service: scene.turn_on
+          target:
+            entity_id: scene.blinds_morning_context
+      - type: button
+        entity: scene.blinds_living_morning
+        name: Living morning
+        tap_action:
+          action: call-service
+          service: scene.turn_on
+          target:
+            entity_id: scene.blinds_living_morning
+      - type: button
+        entity: scene.blinds_living_privacy
+        name: Living privacy
+        tap_action:
+          action: call-service
+          service: scene.turn_on
+          target:
+            entity_id: scene.blinds_living_privacy
+      - type: button
+        entity: scene.blinds_vent_window
+        name: Vent window
+        tap_action:
+          action: call-service
+          service: scene.turn_on
+          target:
+            entity_id: scene.blinds_vent_window
+      - type: button
+        entity: scene.blinds_vent_bedroom
+        name: Vent bedroom
+        tap_action:
+          action: call-service
+          service: scene.turn_on
+          target:
+            entity_id: scene.blinds_vent_bedroom
+      - type: button
+        entity: scene.blinds_vent_livingroom
+        name: Vent living
+        tap_action:
+          action: call-service
+          service: scene.turn_on
+          target:
+            entity_id: scene.blinds_vent_livingroom
+      - type: button
+        entity: scene.blinds_vent_sklad
+        name: Vent sklad
+        tap_action:
+          action: call-service
+          service: scene.turn_on
+          target:
+            entity_id: scene.blinds_vent_sklad
+      - type: button
+        entity: scene.blinds_vent_study
+        name: Vent study
+        tap_action:
+          action: call-service
+          service: scene.turn_on
+          target:
+            entity_id: scene.blinds_vent_study
+      - type: button
+        entity: scene.blinds_all_down
+        name: All down
+        tap_action:
+          action: call-service
+          service: scene.turn_on
+          target:
+            entity_id: scene.blinds_all_down
+      - type: button
+        entity: scene.blinds_all_window_down
+        name: Windows down
+        tap_action:
+          action: call-service
+          service: scene.turn_on
+          target:
+            entity_id: scene.blinds_all_window_down
+      - type: button
+        entity: scene.blinds_all_up
+        name: All up
+        tap_action:
+          action: call-service
+          service: scene.turn_on
+          target:
+            entity_id: scene.blinds_all_up
+  - type: entities
+    title: Living room
+    show_header_toggle: false
+    entities:
+      - entity: scene.blinds_living_down_close
+        name: Down close
+      - entity: scene.blinds_living_down_open
+        name: Down open
+      - entity: scene.blinds_living_down_privacy
+        name: Down privacy
+      - entity: scene.blinds_living_morning_hot
+        name: Morning hot
+      - entity: scene.blinds_living_morning_tilt
+        name: Morning tilt
+  - type: entities
+    title: Ventilation
+    show_header_toggle: false
+    entities:
+      - entity: scene.blinds_vent
+        name: Vent all
+      - entity: scene.blinds_vent_window
+        name: Window
+      - entity: scene.blinds_vent_bedroom
+        name: Bedroom
+      - entity: scene.blinds_vent_livingroom
+        name: Living room
+      - entity: scene.blinds_vent_sklad
+        name: Sklad
+      - entity: scene.blinds_vent_study
+        name: Study
+  - type: entities
+    title: Global
+    show_header_toggle: false
+    entities:
+      - entity: scene.blinds_all_down_open
+        name: All down open
+      - entity: scene.blinds_all_window_privacy
+        name: All window privacy
+      - entity: scene.blinds_down_open
+        name: Down open
+      - entity: scene.blinds_early_morning_context
+        name: Early morning ctx
+  - type: entities
+    title: Tilt
+    show_header_toggle: false
+    entities:
+      - entity: scene.blinds_tilt_close
+        name: Tilt close
+      - entity: scene.blinds_tilt_open
+        name: Tilt open

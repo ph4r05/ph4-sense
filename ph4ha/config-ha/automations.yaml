@@ -30,3 +30,23 @@
       entity_id: scene.blinds_vent_bedroom
     action: scene.turn_on
     data: {}
+
+- id: SwsUsbLamp
+  alias: SwsUsbLamp
+  description: ""
+  triggers:
+    - trigger: state
+      entity_id: sensor.switch4StudyDesk_switch4StudyDesk_action
+      to: 2_single
+    - trigger: mqtt
+      options:
+        topic: zigbee2mqtt/switch4StudyDesk/action
+        payload: 2_single
+  conditions: []
+  actions:
+    - action: switch.toggle
+      metadata: {}
+      data: {}
+      target:
+        entity_id: switch.shelly_power_strip_gen4_switch_3
+  mode: single
