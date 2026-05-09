@@ -1,11 +1,15 @@
 import datetime
 import json
+import os
 from datetime import time
 from enum import Enum, auto
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Mapping, Optional
 
 import appdaemon.plugins.hass.hassapi as hass
 import requests
+
+# Policy engine lives next to this file in the AppDaemon apps directory.
+from blinds_policy import Action, BlindsPolicy, PolicyError
 
 
 class BlindsState(Enum):
@@ -41,6 +45,7 @@ class Blinds(hass.Hass):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.blinds = None
+        self.policy: Optional[BlindsPolicy] = None
         self.weekdays_open_time: Optional[datetime.time] = None
         self.weekends_open_time: Optional[datetime.time] = None
         self.guest_weekdays_open_time: Optional[datetime.time] = None
@@ -107,6 +112,7 @@ class Blinds(hass.Hass):
 
     def initialize(self):
         self.blinds = {x["name"]: x for x in self.args["blinds"]}
+        self._load_policy()
         self.field_weekdays_open_time = self.args["weekdays_open_time"]
         self.field_weekends_open_time = "input_datetime.blinds_weekends_open_time"
         self.field_guest_weekdays_open_time = self.args["guest_weekdays_open_time_input"]
@@ -582,62 +588,32 @@ class Blinds(hass.Hass):
         except Exception as e:
             self.log(f"Error in pre-dusk recomputation: {e}")
 
+    # ------------------------------------------------------------------
+    # Scene dispatch: declarative policy first, template fallback after
+    # ------------------------------------------------------------------
+
     def scene_activated(self, event_name, data, kwargs):
-        # Extract the scene ID or entity ID
         scene_id = data.get("service_data", {}).get("entity_id")
         self.log(f"scene_activated: {scene_id}")
-
         scenes = scene_id if isinstance(scene_id, list) else [scene_id]
         for scene in scenes:
             self.handle_scene(scene)
 
     def handle_scene(self, scene_id):
+        """Resolve a scene.* entity ID into actions, via policy then templates."""
+        if scene_id is None:
+            return
+        name = scene_id[len("scene.") :] if scene_id.startswith("scene.") else scene_id
+
+        # 1. Policy-defined scene wins.
+        if self.policy is not None and self.policy.has_scene(name):
+            return self.apply_scene(name)
+
+        # 2. Per-blind template fallback (open_<bld>, close_<bld>, vent_<bld>,
+        #    tilt_open_<bld>, tilt_close_<bld>). Kept in code because expanding
+        #    these into 25+ YAML entries adds verbosity for no real benefit.
         has_window = "_window" in scene_id
-        if scene_id == "scene.blinds_vent":
-            self.handle_vent()
-        elif scene_id == "scene.blinds_vent_bedroom":
-            self.blinds_vent_bedroom()
-        elif scene_id == "scene.blinds_vent_livingroom":
-            self.blinds_vent_livingroom()
-        elif scene_id == "scene.blinds_living_morning":
-            self.blinds_living_morning()
-        elif scene_id == "scene.blinds_living_morning_hot":
-            self.blinds_living_morning_hot()
-        elif scene_id == "scene.blinds_living_morning_tilt":
-            self.blinds_living_morning_tilt()
-        elif scene_id == "scene.blinds_living_privacy":
-            self.blinds_living_privacy()
-        elif scene_id == "scene.blinds_all_up":
-            self.blinds_all_up()
-        elif scene_id == "scene.blinds_all_down":
-            self.blinds_all_down()
-        elif scene_id == "scene.blinds_all_window_down":
-            self.blinds_all_window_down()
-        elif scene_id == "scene.blinds_all_window_privacy":
-            self.blinds_all_window_privacy()
-        elif scene_id == "scene.blinds_tilt_open":
-            self.blinds_tilt_open()
-        elif scene_id == "scene.blinds_tilt_close":
-            self.blinds_tilt_close()
-        elif scene_id == "scene.blinds_down_open":
-            self.blinds_down_open()
-        elif scene_id == "scene.blinds_all_down_open":
-            self.blinds_all_down_open()
-        elif scene_id == "scene.blinds_morning":
-            self.blinds_morning()
-        elif scene_id == "scene.blinds_morning_context":
-            self.blinds_morning_context()
-        elif scene_id == "scene.blinds_early_morning_context":
-            self.blinds_morning_context(early=True)
-        elif scene_id == "scene.blinds_living_down_close":
-            self.blinds_living_down_close()
-        elif scene_id == "scene.blinds_living_down_open":
-            self.blinds_living_down_open()
-        elif scene_id == "scene.blinds_living_down_privacy":
-            self.blinds_living_down_privacy()
-        elif scene_id.startswith("scene.blinds_vent_window"):
-            self.blinds_vent_window_privacy()
-        elif scene_id.startswith("scene.blinds_vent_"):
+        if scene_id.startswith("scene.blinds_vent_"):
             self.handle_scene_template(scene_id, has_window, 0, self.OPEN_HALF)
         elif scene_id.startswith("scene.blinds_close_"):
             self.handle_scene_template(scene_id, has_window, 0, 0)
@@ -657,157 +633,140 @@ class Blinds(hass.Hass):
             if has_window or scene_id.endswith(f"_{bld_low}"):
                 self.blind_move(bld, pos, tilt)
 
-    def handle_vent(self):
-        self.blinds_pos_tilt(self.BLIND_LIV_DOOR, 0, self.OPEN_HALF)
-        self.blinds_pos_tilt(self.BLIND_BEDROOM, 0, self.OPEN_HALF)
+    # ------------------------------------------------------------------
+    # Policy-driven scene application
+    # ------------------------------------------------------------------
 
-    def blinds_vent_bedroom(self):
-        self.blinds_pos_tilt(self.BLIND_BEDROOM, 0, self.OPEN_HALF)
+    def apply_scene(self, name: str, extra_context: Optional[Mapping[str, Any]] = None) -> Dict[str, Action]:
+        """Evaluate a policy-defined scene and apply each per-blind action.
 
-    def blinds_vent_livingroom(self):
-        self.blinds_pos_tilt(self.BLIND_LIV_DOOR, 0, self.OPEN_HALF)
+        Returns the resolved {blind: Action} mapping (useful for tests/inspection).
+        """
+        if self.policy is None:
+            self.log(f"apply_scene({name!r}): no policy loaded; ignoring")
+            return {}
+        try:
+            ctx = self._build_context(extra_context)
+            actions = self.policy.evaluate(name, ctx)
+        except PolicyError as e:
+            self.log(f"apply_scene({name!r}) failed: {e}")
+            return {}
 
-    def blinds_living_morning(self):
-        self.blinds_pos_tilt(self.BLIND_LIV_BIG, self.living_position, self.OPEN_HALF)
+        if not actions:
+            self.log(f"apply_scene({name!r}): no-op (gated by 'requires:' or all blinds skipped)")
+            return actions
 
-    def blinds_living_morning_hot(self):
-        self.blinds_pos_tilt(self.BLIND_LIV_BIG, self.living_position, 0.2)
+        for blind, action in actions.items():
+            self._apply_action(blind, action)
+        self._run_hooks(name)
+        self.log(f"apply_scene({name!r}) applied {len(actions)} action(s)")
+        return actions
 
-    def blinds_living_morning_tilt(self):
-        self.blinds_pos_tilt(self.BLIND_LIV_BIG, self.living_position, self.living_tilt)
+    def _build_context(self, extra: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+        """Snapshot of runtime flags + bound $inputs for policy evaluation."""
+        ctx: Dict[str, Any] = {
+            # mode flags
+            "guest_mode": bool(self.guest_mode),
+            "automation_enabled": bool(self.automation_enabled),
+            "bedroom_automation_enabled": bool(self.bedroom_automation_enabled),
+            "night_venting_enabled": bool(self.night_venting_enabled),
+            "close_on_dawn_enabled": bool(self.close_on_dawn_enabled),
+            "dusk_automation_enabled": bool(self.dusk_automation_enabled),
+            "full_open_automation_enabled": bool(self.full_open_automation_enabled),
+            "morning_automation_enabled": bool(self.morning_automation_enabled),
+            "morning_weekend_automation_enabled": bool(self.morning_weekend_automation_enabled),
+            "winter_mode": bool(self.winter_mode),
+            # event-local
+            "early": False,
+            # $-bindings (as named in the policy YAML 'inputs:' section)
+            "living_position": self.living_position,
+            "living_tilt": self.living_tilt,
+            "tilt_default": self.tilt,
+        }
+        if extra:
+            ctx.update(extra)
+        return ctx
 
-    def blinds_living_privacy(self):
-        self.blinds_pos_tilt(self.BLIND_LIV_BIG, 30, 0.1)
-
-    def blinds_living_down_close(self):
-        self.blinds_pos_tilt(self.BLIND_LIV_BIG, 0, 0)
-
-    def blinds_living_down_open(self):
-        self.blinds_pos_tilt(self.BLIND_LIV_BIG, 0, self.OPEN_HALF)
-
-    def blinds_living_down_privacy(self):
-        self.blinds_pos_tilt(self.BLIND_LIV_BIG, 0, self.OPEN_PRIVACY)
-
-    def blinds_all_up(self):
-        self.blinds_pos_tilt(self.BLIND_LIV_BIG, 100, 0)
-        self.blinds_pos_tilt(self.BLIND_LIV_DOOR, 100, 0)
-        self.blinds_pos_tilt(self.BLIND_BEDROOM, 100, 0)
-        self.blinds_pos_tilt(self.BLIND_SKLAD, 100, 0)
-        self.blinds_pos_tilt(self.BLIND_STUDY, 100, 0)
-
-    def blinds_all_down(self):
-        self.blinds_pos_tilt(self.BLIND_LIV_BIG, 0, 0)
-        self.blinds_pos_tilt(self.BLIND_LIV_DOOR, 0, 0)
-        self.blinds_pos_tilt(self.BLIND_BEDROOM, 0, 0)
-        self.blinds_pos_tilt(self.BLIND_SKLAD, 0, 0)
-        self.blinds_pos_tilt(self.BLIND_STUDY, 0, 0)
-
-    def blinds_all_window_down(self):
-        self.blinds_pos_tilt(self.BLIND_LIV_BIG, 0, 0)
-        self.blinds_pos_tilt(self.BLIND_BEDROOM, 0, 0)
-        self.blinds_pos_tilt(self.BLIND_SKLAD, 0, 0)
-        self.blinds_pos_tilt(self.BLIND_STUDY, 0, 0)
-
-    def blinds_all_window_privacy(self):
-        self.blinds_pos_tilt(self.BLIND_LIV_BIG, 0, self.OPEN_PRIVACY)
-        self.blinds_pos_tilt(self.BLIND_BEDROOM, 0, 0)
-        self.blinds_pos_tilt(self.BLIND_SKLAD, 0, 0)
-        self.blinds_pos_tilt(self.BLIND_STUDY, 0, 0)
-
-    def blinds_vent_window_privacy(self):
-        self.blinds_tilt(self.BLIND_LIV_BIG, self.OPEN_HALF)
-        self.blinds_tilt(self.BLIND_BEDROOM, self.OPEN_HALF)
-        self.blinds_tilt(self.BLIND_SKLAD, self.OPEN_HALF)
-        self.blinds_tilt(self.BLIND_STUDY, self.OPEN_HALF)
-
-    def blinds_tilt_open(self):
-        self.blinds_tilt(self.BLIND_LIV_BIG, self.OPEN_HALF)
-        self.blinds_tilt(self.BLIND_LIV_DOOR, self.OPEN_HALF)
-        self.blinds_tilt(self.BLIND_BEDROOM, self.OPEN_HALF)
-        self.blinds_tilt(self.BLIND_SKLAD, self.OPEN_HALF)
-        self.blinds_tilt(self.BLIND_STUDY, self.OPEN_HALF)
-
-    def blinds_tilt_close(self):
-        self.blinds_tilt(self.BLIND_LIV_BIG, 0)
-        self.blinds_tilt(self.BLIND_LIV_DOOR, 0)
-        self.blinds_tilt(self.BLIND_BEDROOM, 0)
-        self.blinds_tilt(self.BLIND_SKLAD, 0)
-        self.blinds_tilt(self.BLIND_STUDY, 0)
-
-    def blinds_down_open(self):
-        self.blinds_pos_tilt(self.BLIND_LIV_BIG, 0, self.OPEN_HALF)
-        self.blinds_pos_tilt(self.BLIND_BEDROOM, 0, self.OPEN_HALF)
-        self.blinds_pos_tilt(self.BLIND_SKLAD, 0, self.OPEN_HALF)
-        self.blinds_pos_tilt(self.BLIND_STUDY, 0, self.OPEN_HALF)
-
-    def blinds_all_down_open(self):
-        self.blinds_pos_tilt(self.BLIND_LIV_BIG, 0, self.OPEN_HALF)
-        self.blinds_pos_tilt(self.BLIND_LIV_DOOR, 0, self.OPEN_HALF)
-        self.blinds_pos_tilt(self.BLIND_BEDROOM, 0, self.OPEN_HALF)
-        self.blinds_pos_tilt(self.BLIND_SKLAD, 0, self.OPEN_HALF)
-        self.blinds_pos_tilt(self.BLIND_STUDY, 0, self.OPEN_HALF)
-
-    def blinds_morning(self):
-        self.last_morning_event = datetime.datetime.now()
-        self.blinds_living_morning()
-        self.blinds_pos_tilt(self.BLIND_LIV_DOOR, 100, 0)
-        self.blinds_pos_tilt(self.BLIND_BEDROOM, 100, 0)
-        self.blinds_pos_tilt(self.BLIND_STUDY, 0, self.OPEN_HALF)
-        if not self.guest_mode:
-            self.blinds_pos_tilt(self.BLIND_SKLAD, 0, self.OPEN_HALF)
-
-    def blinds_morning_context(self, early: bool = False):
-        if not self.automation_enabled:
-            self.log("Automation disabled")
+    def _apply_action(self, blind: str, action: Action) -> None:
+        if action.skip or action.is_noop():
             return
+        if action.pos is None and action.tilt is not None:
+            self.blinds_tilt(blind, action.tilt)
+        elif action.pos is not None and action.tilt is not None:
+            self.blinds_pos_tilt(blind, action.pos, action.tilt)
+        elif action.pos is not None and action.tilt is None:
+            # Position-only (no tilt change). Only v2 blinds support this cleanly;
+            # for v1 send pos with current tilt fallback.
+            if self.is_blind_v2(blind):
+                self.blinds_pos_tilt_v2(blind, pos=action.pos)
+            else:
+                self.blinds_pos_tilt_v1(blind, pos=action.pos, tilt=self.OPEN_HALF)
 
-        self.last_morning_context_event = datetime.datetime.now()
-        self.blinds_living_morning()
-        self.blinds_pos_tilt(self.BLIND_LIV_DOOR, 100, 0)
-        self.blinds_pos_tilt(self.BLIND_STUDY, 0, self.OPEN_HALF)
+    def _run_hooks(self, scene_name: str) -> None:
+        if self.policy is None:
+            return
+        for hook in self.policy.hooks(scene_name):
+            now = datetime.datetime.now()
+            if hook == "mark_morning":
+                self.last_morning_event = now
+            elif hook == "mark_morning_context":
+                self.last_morning_context_event = now
+            else:
+                self.log(f"Unknown on_apply hook in scene {scene_name!r}: {hook!r}")
 
-        if not self.guest_mode:
-            self.blinds_pos_tilt(self.BLIND_SKLAD, 0, self.OPEN_HALF)
+    def _load_policy(self) -> None:
+        """Load the declarative policy file referenced from apps.yaml."""
+        policy_file = self.args.get("policy_file")
+        if not policy_file:
+            self.log("No policy_file configured; running without declarative scenes")
+            self.policy = None
+            return
+        if not os.path.isabs(policy_file):
+            # Resolve relative paths against the AppDaemon config dir if available.
+            base = self.config_dir if hasattr(self, "config_dir") else os.getcwd()
+            policy_file = os.path.normpath(os.path.join(base, policy_file))
+        try:
+            self.policy = BlindsPolicy.from_yaml_file(policy_file, list(self.blinds.keys()))
+            self.log(f"Loaded blinds policy from {policy_file}: " f"{len(self.policy.scene_names)} scene(s)")
+        except PolicyError as e:
+            self.log(f"Failed to load policy file {policy_file}: {e}")
+            self.policy = None
 
-        if self.bedroom_automation_enabled and not early:
-            self.blinds_pos_tilt(self.BLIND_BEDROOM, 100, 0)
+    # ------------------------------------------------------------------
+    # Timer entry points (preserve dedup + logging guards)
+    # ------------------------------------------------------------------
 
     def blinds_morning_context_automated(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
         if not self.morning_automation_enabled:
             self.log("Morning automation disabled")
             return
-
         if self.happened_recently(self.last_morning_context_event):
             self.log("Morning context already happened")
             return
-
         if self.happened_recently(self.last_morning_event):
             self.log("Morning already happened")
             return
-
-        return self.blinds_morning_context()
+        return self.apply_scene("blinds_morning_context")
 
     def blinds_on_dusk_event(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
+        # `requires:` in the policy YAML enforces the same gates; this log line
+        # keeps parity with the previous behavior.
         if not self.dusk_automation_enabled or not self.automation_enabled:
             self.log(f"Dusk automation disabled, {self.dusk_automation_enabled=}, {self.automation_enabled=}")
             return
-        self.blinds_living_down_privacy()
-        self.blinds_pos_tilt(self.BLIND_SKLAD, 0, self.OPEN_PRIVACY)
-        self.blinds_pos_tilt(self.BLIND_STUDY, 0, self.OPEN_PRIVACY)
-        if self.winter_mode:
-            self.blinds_pos_tilt(self.BLIND_BEDROOM, 0, self.OPEN_PRIVACY)
+        return self.apply_scene("blinds_dusk")
 
     def blinds_on_pre_dusk_event(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
         if not self.full_open_automation_enabled or not self.automation_enabled:
             self.log(f"Pre Dusk automation disabled, {self.full_open_automation_enabled=}, {self.automation_enabled=}")
             return
-        self.blinds_all_up()
+        return self.apply_scene("blinds_pre_dusk")
 
     def blinds_on_pre_dawn_event(self, entity=None, attribute=None, old=None, new=None, kwargs=None):
         if not self.close_on_dawn_enabled or not self.automation_enabled:
             self.log(f"Pre Dawn automation disabled, {self.close_on_dawn_enabled=}, {self.automation_enabled=}")
             return
-        self.blinds_all_down()
+        return self.apply_scene("blinds_pre_dawn")
 
     def blind_move(self, blind, pos: Optional[float], tilt: float):
         if pos is None:
