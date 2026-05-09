@@ -1,0 +1,165 @@
+# Declarative blinds policy.
+#
+# Loaded by ph4ha/apps/blinds.py via blinds_policy.BlindsPolicy.
+# See ph4ha/apps/blinds_policy.py for the full schema and evaluation rules.
+#
+# Sections:
+#   inputs        - bind $names to runtime values (HA input_number entities or
+#                   AppDaemon class attributes); the host wires them into ctx
+#   tilts         - semantic names for slat positions in [0, 1]
+#   blind_groups  - named subsets of all blinds (referenced as @groupname)
+#   presets       - named (pos, tilt) bundles; pos/tilt may be a literal,
+#                   a tilt alias, or a $name reference
+#   scenes        - per-scene policy. Each blind entry is either a single
+#                   action mapping or a first-match rule list with
+#                   `when:`/`action:` and an optional `default:`.
+#                   Specials: '*' = all blinds, '@group' = group reference,
+#                            'skip' (string) = leave blind alone.
+
+inputs:
+  living_position: input_number.blinds_living_position
+  living_tilt:     input_number.blinds_living_tilt
+  tilt_default:    input_number.blinds_tilt
+
+tilts:
+  closed:       0.0
+  open_privacy: 0.7
+  open_half:    0.9
+  open:         1.0
+
+blind_groups:
+  all:     [LivBig, LivDoor, Bedroom, Study, Sklad]
+  windows: [LivBig, Bedroom, Study, Sklad]   # everything except LivDoor
+
+presets:
+  # Living-room (LivBig) presets — slider-driven where it makes sense.
+  living_morning:      { pos: $living_position, tilt: open_half }
+  living_morning_hot:  { pos: $living_position, tilt: 0.2 }
+  living_morning_tilt: { pos: $living_position, tilt: $living_tilt }
+  living_privacy:      { pos: 30,                tilt: 0.1 }
+  living_down_close:   { pos: 0,                 tilt: closed }
+  living_down_open:    { pos: 0,                 tilt: open_half }
+  living_down_privacy: { pos: 0,                 tilt: open_privacy }
+
+  # Generic per-blind presets.
+  closed_up:    { pos: 100, tilt: closed }       # fully retracted
+  fully_down:   { pos: 0,   tilt: closed }       # fully closed
+  vented:       { pos: 0,   tilt: open_half }    # down + tilted for airflow
+  privacy_down: { pos: 0,   tilt: open_privacy } # down + privacy tilt
+
+scenes:
+  # ---------------------------------------------------------------------
+  # Morning
+  # ---------------------------------------------------------------------
+  blinds_morning:
+    on_apply: [mark_morning]
+    blinds:
+      LivBig:  { preset: living_morning }
+      LivDoor: { preset: closed_up }
+      Bedroom: { preset: closed_up }
+      Study:   { preset: vented }
+      Sklad:
+        # User wants Sklad fully up on morning, except in guest mode (was: vented)
+        - when: "guest_mode"
+          action: skip
+        - default: { preset: closed_up }
+
+  blinds_morning_context:
+    requires: "automation_enabled"
+    on_apply: [mark_morning_context]
+    blinds:
+      LivBig:  { preset: living_morning }
+      LivDoor: { preset: closed_up }
+      Study:   { preset: vented }
+      Sklad:
+        - when: "guest_mode"
+          action: skip
+        - default: { preset: closed_up }
+      Bedroom:
+        - when: "early or not bedroom_automation_enabled"
+          action: skip
+        - default: { preset: closed_up }
+
+  # Same as blinds_morning_context, with `early` flag set.
+  blinds_early_morning_context:
+    inherits: blinds_morning_context
+    set: { early: true }
+
+  # ---------------------------------------------------------------------
+  # Living-room single-blind scenes (LivBig only)
+  # ---------------------------------------------------------------------
+  blinds_living_morning:
+    blinds: { LivBig: { preset: living_morning } }
+  blinds_living_morning_hot:
+    blinds: { LivBig: { preset: living_morning_hot } }
+  blinds_living_morning_tilt:
+    blinds: { LivBig: { preset: living_morning_tilt } }
+  blinds_living_privacy:
+    blinds: { LivBig: { preset: living_privacy } }
+  blinds_living_down_close:
+    blinds: { LivBig: { preset: living_down_close } }
+  blinds_living_down_open:
+    blinds: { LivBig: { preset: living_down_open } }
+  blinds_living_down_privacy:
+    blinds: { LivBig: { preset: living_down_privacy } }
+
+  # ---------------------------------------------------------------------
+  # Whole-house scenes
+  # ---------------------------------------------------------------------
+  blinds_all_up:
+    blinds: { "@all": { preset: closed_up } }
+  blinds_all_down:
+    blinds: { "@all": { preset: fully_down } }
+  blinds_all_window_down:
+    blinds: { "@windows": { preset: fully_down } }
+  blinds_all_window_privacy:
+    blinds:
+      LivBig:  { preset: living_down_privacy }
+      Bedroom: { preset: fully_down }
+      Sklad:   { preset: fully_down }
+      Study:   { preset: fully_down }
+  blinds_down_open:
+    blinds: { "@windows": { preset: vented } }
+  blinds_all_down_open:
+    blinds: { "@all": { preset: vented } }
+  blinds_tilt_open:
+    blinds: { "@all": { tilt: open_half } }
+  blinds_tilt_close:
+    blinds: { "@all": { tilt: closed } }
+
+  # ---------------------------------------------------------------------
+  # Ventilation
+  # ---------------------------------------------------------------------
+  blinds_vent:
+    blinds:
+      LivDoor: { preset: vented }
+      Bedroom: { preset: vented }
+  blinds_vent_bedroom:
+    blinds: { Bedroom: { preset: vented } }
+  blinds_vent_livingroom:
+    blinds: { LivDoor: { preset: vented } }
+  blinds_vent_window:
+    # Tilt all window-class blinds open to half (no position change).
+    blinds: { "@windows": { tilt: open_half } }
+
+  # ---------------------------------------------------------------------
+  # Time-driven scenes (called from python timers, not user-activated)
+  # ---------------------------------------------------------------------
+  blinds_dusk:
+    requires: "dusk_automation_enabled and automation_enabled"
+    blinds:
+      LivBig:  { preset: living_down_privacy }
+      Sklad:   { preset: privacy_down }
+      Study:   { preset: privacy_down }
+      Bedroom:
+        - when: "winter_mode"
+          action: { preset: privacy_down }
+        - default: skip
+
+  blinds_pre_dusk:
+    requires: "full_open_automation_enabled and automation_enabled"
+    blinds: { "@all": { preset: closed_up } }
+
+  blinds_pre_dawn:
+    requires: "close_on_dawn_enabled and automation_enabled"
+    blinds: { "@all": { preset: fully_down } }

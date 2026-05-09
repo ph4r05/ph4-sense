@@ -14,6 +14,8 @@ venting:
 blinds:
   module: blinds
   class: Blinds
+  # See ph4ha/config/blinds_policy.yaml for the per-room scene policy.
+  policy_file: blinds_policy.yaml
   blinds:
     - name: "LivBig"
       ip_address: "192.168.0.10"
