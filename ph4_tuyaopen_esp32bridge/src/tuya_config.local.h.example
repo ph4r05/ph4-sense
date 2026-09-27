@@ -1,0 +1,16 @@
+#ifndef TUYA_CONFIG_LOCAL_H_
+#define TUYA_CONFIG_LOCAL_H_
+
+/**
+ * Real Tuya credentials — copy this file to tuya_config.local.h (gitignored)
+ * and fill in your actual values. Never commit tuya_config.local.h.
+ */
+#undef TUYA_PRODUCT_ID
+#undef TUYA_OPENSDK_UUID
+#undef TUYA_OPENSDK_AUTHKEY
+
+#define TUYA_PRODUCT_ID        "xxxxxxxxxxxxxxxx"
+#define TUYA_OPENSDK_UUID      "uuidxxxxxxxxxxxxxxxx"
+#define TUYA_OPENSDK_AUTHKEY   "keyxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+#endif

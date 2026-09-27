@@ -10,6 +10,7 @@
 #include "config.h"
 #include "tuya_cloud.h"
 #include "dp_bridge.h"
+#include "dp_map.h"
 
 #if __has_include("ha_mqtt.h")
 #include "ha_mqtt.h"
@@ -27,18 +28,7 @@ static inline ha_mqtt_state_t ha_mqtt_get_state(void) { return 0; }
 
 static const char *TAG = "dp_bridge";
 
-/* DP layout — numeric IDs for TuyaOpen */
-#ifndef SWITCH_DP_BASE
-#define SWITCH_DP_BASE   1
-#endif
-#ifndef SOCKET_DP_BASE
-#define SOCKET_DP_BASE   17
-#endif
-
-#define SWITCH_DP(ch)    ((uint8_t)(SWITCH_DP_BASE + (ch) - 1))
-#define SOCKET_DP(ch)    ((uint8_t)(SOCKET_DP_BASE + (ch) - 1))
-#define DP_TO_SWITCH(dp) ((int)((dp) - SWITCH_DP_BASE + 1))
-#define DP_TO_SOCKET(dp) ((int)((dp) - SOCKET_DP_BASE + 1))
+/* DP layout — see dp_map.h; DP IDs are NOT a linear base+offset range */
 
 /* ------------------------------------------------------------------ */
 /* Auto-reset timer state per socket channel                           */
@@ -68,7 +58,7 @@ static void socket_auto_reset_cb(void *arg)
     ESP_LOGI(TAG, "Socket ch%d auto-reset -> OFF", ch);
 
     s_socket_state[ch - 1] = false;
-    tuya_cloud_report_bool(SOCKET_DP(ch), false);
+    tuya_cloud_report_bool(relay_channel_to_dp(ch), false);
     ha_mqtt_publish_socket_state(ch, false);
 }
 
@@ -119,7 +109,7 @@ static void handle_switch_set(uint8_t channel, bool value)
 
     ESP_LOGI(TAG, "Switch ch%d -> %s (from HA)", channel, value ? "ON" : "OFF");
     s_switch_state[channel - 1] = value;
-    tuya_cloud_report_bool(SWITCH_DP(channel), value);
+    tuya_cloud_report_bool(switch_channel_to_dp(channel), value);
     ha_mqtt_publish_switch_state(channel, value);
 }
 
@@ -189,7 +179,7 @@ static void parse_mqtt_topic(const char *topic, const char *data)
                       strcmp(data, "true") == 0);
         ESP_LOGI(TAG, "Socket ch%d manually set to %s by HA", channel, value ? "ON" : "OFF");
         s_socket_state[channel - 1] = value;
-        tuya_cloud_report_bool(SOCKET_DP(channel), value);
+        tuya_cloud_report_bool(relay_channel_to_dp((uint8_t)channel), value);
         ha_mqtt_publish_socket_state((uint8_t)channel, value);
         return;
     }
@@ -202,8 +192,8 @@ static void parse_mqtt_topic(const char *topic, const char *data)
 /* ------------------------------------------------------------------ */
 void dp_bridge_on_tuya_dp(uint8_t dp_id, bool value, void *user_data)
 {
-    int sw_ch = DP_TO_SWITCH(dp_id);
-    int sk_ch = DP_TO_SOCKET(dp_id);
+    int sw_ch = dp_to_switch_channel(dp_id);
+    int sk_ch = dp_to_relay_channel(dp_id);
 
     if (sw_ch >= 1 && sw_ch <= s_cfg->switch_count) {
         ESP_LOGI(TAG, "Tuya -> switch ch%d = %s", sw_ch, value ? "ON" : "OFF");
@@ -259,9 +249,12 @@ esp_err_t dp_bridge_init(const app_config_t *cfg)
 
     ESP_LOGI(TAG, "Bridge initialized: %d switch + %d socket channels",
              cfg->switch_count, cfg->socket_count);
-    ESP_LOGI(TAG, "Switch DPs: %d..%d   Socket DPs: %d..%d",
-             SWITCH_DP_BASE, SWITCH_DP_BASE + cfg->switch_count - 1,
-             SOCKET_DP_BASE, SOCKET_DP_BASE + cfg->socket_count - 1);
+    for (uint8_t i = 1; i <= cfg->switch_count; i++) {
+        ESP_LOGI(TAG, "  switch ch%d -> DP %d", i, switch_channel_to_dp(i));
+    }
+    for (uint8_t i = 1; i <= cfg->socket_count; i++) {
+        ESP_LOGI(TAG, "  socket ch%d -> DP %d", i, relay_channel_to_dp(i));
+    }
     ESP_LOGI(TAG, "Socket auto-reset: %d ms, mask=0x%04X",
              (int)cfg->socket_auto_reset_ms,
              cfg->socket_auto_reset_mask);

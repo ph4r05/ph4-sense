@@ -13,11 +13,20 @@
  *   Or: Tuya IoT Platform → Product → Device → Authorization → get license
  *
  * WARNING: Replace these with your actual values, otherwise the device cannot work.
+ *
+ * Do NOT put real credentials directly in this file — it is tracked in git.
+ * Instead, copy tuya_config.local.h.example to tuya_config.local.h (already
+ * gitignored) and fill in the real values there; it overrides the
+ * placeholders below when present. See ../HISTORY.md.
  */
 // clang-format off
 #define TUYA_PRODUCT_ID        "xxxxxxxxxxxxxxxx"                        // Your product ID
 #define TUYA_OPENSDK_UUID      "uuidxxxxxxxxxxxxxxxx"                    // Your device UUID (20 chars)
 #define TUYA_OPENSDK_AUTHKEY   "keyxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"        // Your device auth key (32 chars)
 // clang-format on
+
+#if __has_include("tuya_config.local.h")
+#include "tuya_config.local.h"
+#endif
 
 #endif

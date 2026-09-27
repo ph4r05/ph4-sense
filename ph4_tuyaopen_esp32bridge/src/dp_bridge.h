@@ -6,9 +6,9 @@
 /**
  * dp_bridge — glue between Tuya DPs and Home Assistant MQTT.
  *
- * Same concept as the TuyaLink variant, but uses numeric DP IDs:
- *   Switch DPs 1..16:   HA -> Tuya (HA controls SmartLife switches)
- *   Socket DPs 17..32:  Tuya -> HA (SmartLife triggers HA automations)
+ * Same concept as the TuyaLink variant, but uses numeric DP IDs.
+ * The actual DP ID per channel is NOT a linear range — see dp_map.h and
+ * HISTORY.md for the real (non-contiguous) layout assigned in the Tuya console.
  */
 
 esp_err_t dp_bridge_init(const app_config_t *cfg);

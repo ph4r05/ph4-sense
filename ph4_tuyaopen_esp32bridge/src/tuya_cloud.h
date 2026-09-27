@@ -6,9 +6,9 @@
 /**
  * tuya_cloud — TuyaOpen SDK wrapper with SmartLife app pairing.
  *
- * DP layout (numeric IDs):
- *   1..16  = switch channels (HA → Tuya)
- *   17..32 = relay/socket channels (Tuya → HA)
+ * DP layout: see dp_map.h — DP IDs are per-channel lookups, not a linear
+ * range, because of how Tuya assigned DPs in the product console (see
+ * HISTORY.md).
  */
 
 typedef enum {

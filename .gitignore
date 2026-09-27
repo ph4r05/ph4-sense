@@ -12,3 +12,6 @@ config.yaml
 ph4_esp32/config.json
 *.secret.md
 .env
+tuya_config.local.h
+ph4_tuyaopen_esp32bridge/tuyaopen/
+ph4_tuyaopen_esp32bridge/.build/
