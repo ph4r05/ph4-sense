@@ -100,9 +100,9 @@ TuyaOpen API rather than ported from attempt 1's SDK-agnostic interface.
 `ha_mqtt.c`. Since then (2026-09-27): real credentials obtained and stored in
 gitignored `src/tuya_config.local.h` (not committed — `tuya_config.h` keeps
 placeholders); the full 32-DP schema is now correctly assigned in the console
-and matches `src/dp_map.h`. `.build/cache` shows a `tos` Kconfig pass was
-run, but there's still no evidence of a full successful build or an
-on-device pairing test — that's the next step.
+and matches `src/dp_map.h`; **first successful `tos.py build` for ESP32-C6**
+(see "First successful build" below) — flashing/pairing on real hardware is
+the next step, not yet done.
 
 ## DP schema mismatch discovered 2026-09-27
 
@@ -148,6 +148,59 @@ Real credentials (PID, device UUID/AuthKey) are kept out of git in
 credentials rule — `src/tuya_config.h` keeps placeholder values and includes
 the local file when present.
 
+## First successful build, 2026-09-27
+
+The initial scaffold (attempt 2, above) had never actually been built. Doing
+so surfaced that it mixed two incompatible APIs: `app_main.c` correctly used
+TuyaOpen's `tal_*` abstraction layer, but `config.c`, `dp_bridge.c`,
+`tuya_cloud.c`, and `ha_mqtt.c` were written against raw ESP-IDF APIs
+(`esp_log.h`/`ESP_LOG*`, `esp_err_t`, `nvs_flash.h`, `esp_timer.h`,
+FreeRTOS headers, `esp_mqtt_client`) — none of which are reachable from app
+code in a TuyaOpen build (this app only sees TuyaOpen's own headers, not raw
+ESP-IDF ones), exactly the incompatibility attempt 1's rejection of TuyaOpen
+(see "Attempt 2" above) predicted. This wasn't a design tradeoff to weigh —
+it just needed porting to compile at all:
+
+- **Logging:** `ESP_LOGI/W/E/D` → `PR_INFO/WARN/ERR/DEBUG` (`tal_log.h`, no
+  per-call tag).
+- **Error type:** `esp_err_t`/`ESP_OK` → `OPERATE_RET`/`OPRT_OK` (and related
+  `OPRT_*` codes from `tuya_error_code.h`) across every function signature
+  in `config.h`, `dp_bridge.h`, `tuya_cloud.h`, `ha_mqtt.h`.
+- **Config storage:** NVS (`nvs_open`/`nvs_get_str`/...) → `tal_kv_set/get`,
+  storing the whole config as one JSON blob under a single key instead of
+  per-field NVS entries (reusing the existing `config_to_json`/
+  `config_apply_json` round-trip).
+- **Per-socket auto-reset timer:** `esp_timer_create/start_once/stop` →
+  `tal_sw_timer_create/start/stop` (`TAL_TIMER_ONCE`).
+- **Reboot:** `esp_restart()` → `tal_system_reset()`.
+- **HA MQTT client:** ESP-IDF's `esp_mqtt_client` isn't reachable at all, so
+  `ha_mqtt.c` was rewritten against TuyaOpen's own portable
+  `mqtt_client_interface.h` (`src/libmqtt/`) — the same client TuyaOpen uses
+  internally for its Tuya-cloud MQTT connection. Since that connection is a
+  second, independent broker (the local HA instance, not Tuya cloud), it
+  needed its own connect/retry/yield loop on a dedicated `tal_thread`, unlike
+  the Tuya-cloud link which is pumped by `tuya_iot_yield()` in the existing
+  main loop. Known regression: this interface has no last-will/testament
+  option, so the broker won't auto-publish "offline" on an unclean
+  disconnect (only an explicit `ha_mqtt_stop()` does) — acceptable for now,
+  revisit if it matters in practice.
+
+**Unrelated upstream build failure hit along the way:** TuyaOpen's ESP32
+platform bundles `espressif/esp-sr` (voice recognition) as a hard dependency
+for every app via `tuyaos_adapter`'s component requirements — not something
+this app opted into or can opt out of by editing `main/idf_component.yml`
+(tried; CMake then fails to resolve the `esp-sr` component required by
+`tuyaos_adapter`). `esp-sr` pulls in `espressif/esp-dl ~3.3.12`, which
+references `MALLOC_CAP_SIMD`, a flag missing from the ESP-IDF version pinned
+to this platform commit for `esp32c6`. Patched with a `#ifndef` fallback
+(`MALLOC_CAP_SIMD` → `0`, a no-op allocation hint) in two esp-dl source
+files. Full writeup + a script to reapply it after a fresh `tuyaopen` clone:
+`docs/tuyaopen-sdk-patches/`.
+
+Result: `tos.py build` for ESP32-C6 completes —
+`dist/ph4_tuyaopen_esp32bridge_1.0.0/ph4_tuyaopen_esp32bridge_QIO_1.0.0.bin`.
+Not yet flashed or tested on real hardware; SmartLife pairing is unverified.
+
 ## Where to look for more detail
 
 - `ph4_tuya_esp32bridge/docs/sdk-selection/README.md` — full SDK comparison
@@ -158,3 +211,7 @@ the local file when present.
 - `ph4_tuya_esp32bridge/README.md` — the TuyaLink attempt's full setup/build/
   provisioning docs, including the error-11 warning.
 - `git log -- ph4_tuya_esp32bridge` — commit-by-commit progression of attempt 1.
+- `docs/tuyaopen-sdk-patches/` — local patches to the gitignored `tuyaopen/`
+  clone (currently: the `MALLOC_CAP_SIMD` esp-dl fix) and scripts to reapply
+  them after a fresh clone.
+- `src/dp_map.h` — the real (non-contiguous) per-channel DP ID tables.

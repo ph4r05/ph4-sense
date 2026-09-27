@@ -15,8 +15,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include "esp_log.h"
-#include "esp_err.h"
+#include "tal_api.h"
 
 #include "tuya_iot.h"
 #include "tuya_iot_dp.h"
@@ -26,8 +25,6 @@
 #include "config.h"
 #include "tuya_cloud.h"
 #include "dp_map.h"
-
-static const char *TAG = "tuya_cloud";
 
 /* ------------------------------------------------------------------ */
 /* Internal state                                                       */
@@ -45,7 +42,7 @@ static bool s_socket_state[CFG_SOCKET_COUNT_MAX] = {false};
 /* ------------------------------------------------------------------ */
 /* Public API                                                           */
 /* ------------------------------------------------------------------ */
-esp_err_t tuya_cloud_init(const app_config_t *cfg,
+OPERATE_RET tuya_cloud_init(const app_config_t *cfg,
                           tuya_dp_recv_cb_t dp_cb,
                           tuya_state_cb_t   state_cb,
                           void             *user_data)
@@ -56,22 +53,22 @@ esp_err_t tuya_cloud_init(const app_config_t *cfg,
     s_user_data = user_data;
 
     for (uint8_t i = 1; i <= cfg->switch_count; i++)
-        ESP_LOGI(TAG, "  switch ch%d -> DP %d", i, switch_channel_to_dp(i));
+        PR_INFO("  switch ch%d -> DP %d", i, switch_channel_to_dp(i));
     for (uint8_t i = 1; i <= cfg->socket_count; i++)
-        ESP_LOGI(TAG, "  socket ch%d -> DP %d", i, relay_channel_to_dp(i));
+        PR_INFO("  socket ch%d -> DP %d", i, relay_channel_to_dp(i));
 
     /* Note: tuya_iot_init() is called from tuya_app_main / user_main,
      * not here. This function just stores the bridge callbacks. */
-    return ESP_OK;
+    return OPRT_OK;
 }
 
-esp_err_t tuya_cloud_start(void)
+OPERATE_RET tuya_cloud_start(void)
 {
     /* tuya_iot_start() is called from user_main after tuya_iot_init() */
-    return ESP_OK;
+    return OPRT_OK;
 }
 
-esp_err_t tuya_cloud_report_bool(uint8_t dp_id, bool value)
+OPERATE_RET tuya_cloud_report_bool(uint8_t dp_id, bool value)
 {
     /* Update shadow */
     int sw_ch = dp_to_switch_channel(dp_id);
@@ -88,19 +85,19 @@ esp_err_t tuya_cloud_report_bool(uint8_t dp_id, bool value)
     tuya_iot_client_t *client = tuya_iot_client_get();
     int ret = tuya_iot_dp_report_json(client, json);
     if (ret != 0) {
-        ESP_LOGE(TAG, "dp_report_json(dp=%d) failed: %d", dp_id, ret);
-        return ESP_FAIL;
+        PR_ERR("dp_report_json(dp=%d) failed: %d", dp_id, ret);
+        return OPRT_COM_ERROR;
     }
 
-    ESP_LOGD(TAG, "Reported DP %d = %s", dp_id, value ? "true" : "false");
-    return ESP_OK;
+    PR_DEBUG("Reported DP %d = %s", dp_id, value ? "true" : "false");
+    return OPRT_OK;
 }
 
-esp_err_t tuya_cloud_report_multi(const uint8_t *dp_ids,
+OPERATE_RET tuya_cloud_report_multi(const uint8_t *dp_ids,
                                   const bool    *values,
                                   uint8_t        count)
 {
-    if (count == 0) return ESP_OK;
+    if (count == 0) return OPRT_OK;
 
     /* Build JSON: {"1":true,"2":false,...} */
     cJSON *root = cJSON_CreateObject();
@@ -119,18 +116,18 @@ esp_err_t tuya_cloud_report_multi(const uint8_t *dp_ids,
 
     char *json = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
-    if (!json) return ESP_ERR_NO_MEM;
+    if (!json) return OPRT_MALLOC_FAILED;
 
     tuya_iot_client_t *client = tuya_iot_client_get();
     int ret = tuya_iot_dp_report_json(client, json);
     free(json);
 
-    return (ret == 0) ? ESP_OK : ESP_FAIL;
+    return (ret == 0) ? OPRT_OK : OPRT_COM_ERROR;
 }
 
-esp_err_t tuya_cloud_report_all(void)
+OPERATE_RET tuya_cloud_report_all(void)
 {
-    if (!s_cfg) return ESP_ERR_INVALID_STATE;
+    if (!s_cfg) return OPRT_INVALID_PARM;
 
     uint8_t dp_ids[CFG_SWITCH_COUNT_MAX + CFG_SOCKET_COUNT_MAX];
     bool    values[CFG_SWITCH_COUNT_MAX + CFG_SOCKET_COUNT_MAX];

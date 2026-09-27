@@ -73,17 +73,17 @@ static void try_start_ha_mqtt(void)
     }
 
     PR_INFO("Starting HA MQTT client -> %s:%d", s_cfg.mqtt_host, s_cfg.mqtt_port);
-    esp_err_t err = ha_mqtt_start(&s_cfg,
+    OPERATE_RET err = ha_mqtt_start(&s_cfg,
                                    dp_bridge_on_mqtt_msg,
                                    (ha_mqtt_state_cb_t)dp_bridge_on_mqtt_state,
                                    NULL);
-    if (err == ESP_OK) {
+    if (err == OPRT_OK) {
         s_ha_mqtt_started = true;
     } else {
         PR_ERR("HA MQTT start failed: %d", err);
     }
 #else
-    PR_WARN("HA MQTT not available in this build (needs ESP-IDF mqtt component)");
+    PR_WARN("HA MQTT not available in this build");
 #endif
 }
 

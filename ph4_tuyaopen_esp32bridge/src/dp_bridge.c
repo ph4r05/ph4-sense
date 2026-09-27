@@ -1,12 +1,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/timers.h"
-#include "esp_log.h"
-#include "esp_err.h"
-#include "esp_timer.h"
+#include "tal_api.h"
 #include "config.h"
 #include "tuya_cloud.h"
 #include "dp_bridge.h"
@@ -18,15 +13,13 @@
 #else
 #define HA_MQTT_ENABLED 0
 /* Stubs when HA MQTT is not available */
-static inline esp_err_t ha_mqtt_publish_switch_state(uint8_t ch, bool v) { return ESP_OK; }
-static inline esp_err_t ha_mqtt_publish_socket_state(uint8_t ch, bool v) { return ESP_OK; }
-static inline esp_err_t ha_mqtt_publish_status(const char *j) { return ESP_OK; }
+static inline OPERATE_RET ha_mqtt_publish_switch_state(uint8_t ch, bool v) { return OPRT_OK; }
+static inline OPERATE_RET ha_mqtt_publish_socket_state(uint8_t ch, bool v) { return OPRT_OK; }
+static inline OPERATE_RET ha_mqtt_publish_status(const char *j) { return OPRT_OK; }
 typedef int ha_mqtt_state_t;
 #define HA_MQTT_STATE_CONNECTED 2
 static inline ha_mqtt_state_t ha_mqtt_get_state(void) { return 0; }
 #endif
-
-static const char *TAG = "dp_bridge";
 
 /* DP layout — see dp_map.h; DP IDs are NOT a linear base+offset range */
 
@@ -34,8 +27,8 @@ static const char *TAG = "dp_bridge";
 /* Auto-reset timer state per socket channel                           */
 /* ------------------------------------------------------------------ */
 typedef struct {
-    esp_timer_handle_t timer;
-    uint8_t            channel;  /* 1-based */
+    TIMER_ID timer;
+    uint8_t  channel;  /* 1-based */
 } socket_reset_ctx_t;
 
 /* ------------------------------------------------------------------ */
@@ -50,12 +43,12 @@ static socket_reset_ctx_t s_reset_ctx[CFG_SOCKET_COUNT_MAX];
 /* ------------------------------------------------------------------ */
 /* Auto-reset timer callback                                            */
 /* ------------------------------------------------------------------ */
-static void socket_auto_reset_cb(void *arg)
+static void socket_auto_reset_cb(TIMER_ID timer_id, void *arg)
 {
     socket_reset_ctx_t *ctx = (socket_reset_ctx_t *)arg;
     uint8_t ch = ctx->channel;
 
-    ESP_LOGI(TAG, "Socket ch%d auto-reset -> OFF", ch);
+    PR_INFO("Socket ch%d auto-reset -> OFF", ch);
 
     s_socket_state[ch - 1] = false;
     tuya_cloud_report_bool(relay_channel_to_dp(ch), false);
@@ -68,7 +61,7 @@ static void socket_auto_reset_cb(void *arg)
 static void handle_socket_trigger(uint8_t channel, bool value)
 {
     if (channel < 1 || channel > s_cfg->socket_count) {
-        ESP_LOGW(TAG, "Socket channel %d out of range", channel);
+        PR_WARN("Socket channel %d out of range", channel);
         return;
     }
 
@@ -84,16 +77,11 @@ static void handle_socket_trigger(uint8_t channel, bool value)
         socket_reset_ctx_t *ctx = &s_reset_ctx[channel - 1];
         if (ctx->timer == NULL) {
             ctx->channel = channel;
-            const esp_timer_create_args_t ta = {
-                .callback = socket_auto_reset_cb,
-                .arg      = ctx,
-                .name     = "sk_reset",
-            };
-            esp_timer_create(&ta, &ctx->timer);
+            tal_sw_timer_create(socket_auto_reset_cb, ctx, &ctx->timer);
         }
-        esp_timer_stop(ctx->timer);
-        esp_timer_start_once(ctx->timer, (uint64_t)reset_ms * 1000);
-        ESP_LOGD(TAG, "Socket ch%d auto-reset in %d ms", channel, (int)reset_ms);
+        tal_sw_timer_stop(ctx->timer);
+        tal_sw_timer_start(ctx->timer, reset_ms, TAL_TIMER_ONCE);
+        PR_DEBUG("Socket ch%d auto-reset in %d ms", channel, (int)reset_ms);
     }
 }
 
@@ -103,11 +91,11 @@ static void handle_socket_trigger(uint8_t channel, bool value)
 static void handle_switch_set(uint8_t channel, bool value)
 {
     if (channel < 1 || channel > s_cfg->switch_count) {
-        ESP_LOGW(TAG, "Switch channel %d out of range", channel);
+        PR_WARN("Switch channel %d out of range", channel);
         return;
     }
 
-    ESP_LOGI(TAG, "Switch ch%d -> %s (from HA)", channel, value ? "ON" : "OFF");
+    PR_INFO("Switch ch%d -> %s (from HA)", channel, value ? "ON" : "OFF");
     s_switch_state[channel - 1] = value;
     tuya_cloud_report_bool(switch_channel_to_dp(channel), value);
     ha_mqtt_publish_switch_state(channel, value);
@@ -118,20 +106,20 @@ static void handle_switch_set(uint8_t channel, bool value)
 /* ------------------------------------------------------------------ */
 static void handle_cmd(const char *cmd)
 {
-    ESP_LOGI(TAG, "Command: %s", cmd);
+    PR_INFO("Command: %s", cmd);
 
     if (strcmp(cmd, "reset") == 0) {
-        ESP_LOGW(TAG, "Factory reset requested via MQTT");
+        PR_WARN("Factory reset requested via MQTT");
         tuya_cloud_factory_reset();
         return;
     }
     if (strcmp(cmd, "reboot") == 0) {
-        ESP_LOGW(TAG, "Reboot requested via MQTT");
-        esp_restart();
+        PR_WARN("Reboot requested via MQTT");
+        tal_system_reset();
         return;
     }
     if (strcmp(cmd, "sync") == 0) {
-        ESP_LOGI(TAG, "Syncing all DPs to Tuya cloud");
+        PR_INFO("Syncing all DPs to Tuya cloud");
         tuya_cloud_report_all();
         return;
     }
@@ -147,7 +135,7 @@ static void handle_cmd(const char *cmd)
         ha_mqtt_publish_status(buf);
         return;
     }
-    ESP_LOGW(TAG, "Unknown command: %s", cmd);
+    PR_WARN("Unknown command: %s", cmd);
 }
 
 /* ------------------------------------------------------------------ */
@@ -177,14 +165,14 @@ static void parse_mqtt_topic(const char *topic, const char *data)
     if (sscanf(rest, "/socket/%d/set", &channel) == 1 && channel > 0) {
         bool value = (strcmp(data, "ON") == 0 || strcmp(data, "1") == 0 ||
                       strcmp(data, "true") == 0);
-        ESP_LOGI(TAG, "Socket ch%d manually set to %s by HA", channel, value ? "ON" : "OFF");
+        PR_INFO("Socket ch%d manually set to %s by HA", channel, value ? "ON" : "OFF");
         s_socket_state[channel - 1] = value;
         tuya_cloud_report_bool(relay_channel_to_dp((uint8_t)channel), value);
         ha_mqtt_publish_socket_state((uint8_t)channel, value);
         return;
     }
 
-    ESP_LOGD(TAG, "Unhandled MQTT topic: %s", topic);
+    PR_DEBUG("Unhandled MQTT topic: %s", topic);
 }
 
 /* ------------------------------------------------------------------ */
@@ -196,19 +184,19 @@ void dp_bridge_on_tuya_dp(uint8_t dp_id, bool value, void *user_data)
     int sk_ch = dp_to_relay_channel(dp_id);
 
     if (sw_ch >= 1 && sw_ch <= s_cfg->switch_count) {
-        ESP_LOGI(TAG, "Tuya -> switch ch%d = %s", sw_ch, value ? "ON" : "OFF");
+        PR_INFO("Tuya -> switch ch%d = %s", sw_ch, value ? "ON" : "OFF");
         s_switch_state[sw_ch - 1] = value;
         ha_mqtt_publish_switch_state((uint8_t)sw_ch, value);
         return;
     }
 
     if (sk_ch >= 1 && sk_ch <= s_cfg->socket_count) {
-        ESP_LOGI(TAG, "Tuya -> socket ch%d = %s", sk_ch, value ? "ON" : "OFF");
+        PR_INFO("Tuya -> socket ch%d = %s", sk_ch, value ? "ON" : "OFF");
         handle_socket_trigger((uint8_t)sk_ch, value);
         return;
     }
 
-    ESP_LOGW(TAG, "Unhandled Tuya DP %d = %s", dp_id, value ? "true" : "false");
+    PR_WARN("Unhandled Tuya DP %d = %s", dp_id, value ? "true" : "false");
 }
 
 void dp_bridge_on_mqtt_msg(const char *topic, const char *data, void *user_data)
@@ -218,7 +206,7 @@ void dp_bridge_on_mqtt_msg(const char *topic, const char *data, void *user_data)
 
 void dp_bridge_on_tuya_state(int tuya_state, void *user_data)
 {
-    ESP_LOGI(TAG, "Tuya state -> %d", tuya_state);
+    PR_INFO("Tuya state -> %d", tuya_state);
     if (tuya_state == TUYA_STATE_CONNECTED) {
         handle_cmd("status");
     }
@@ -226,7 +214,7 @@ void dp_bridge_on_tuya_state(int tuya_state, void *user_data)
 
 void dp_bridge_on_mqtt_state(int mqtt_state, void *user_data)
 {
-    ESP_LOGI(TAG, "MQTT state -> %d", mqtt_state);
+    PR_INFO("MQTT state -> %d", mqtt_state);
     if (mqtt_state == HA_MQTT_STATE_CONNECTED) {
         for (uint8_t i = 0; i < s_cfg->switch_count; i++) {
             ha_mqtt_publish_switch_state(i + 1, s_switch_state[i]);
@@ -240,29 +228,29 @@ void dp_bridge_on_mqtt_state(int mqtt_state, void *user_data)
 /* ------------------------------------------------------------------ */
 /* Public API                                                           */
 /* ------------------------------------------------------------------ */
-esp_err_t dp_bridge_init(const app_config_t *cfg)
+OPERATE_RET dp_bridge_init(const app_config_t *cfg)
 {
     s_cfg = cfg;
     memset(s_switch_state, 0, sizeof(s_switch_state));
     memset(s_socket_state, 0, sizeof(s_socket_state));
     memset(s_reset_ctx,    0, sizeof(s_reset_ctx));
 
-    ESP_LOGI(TAG, "Bridge initialized: %d switch + %d socket channels",
+    PR_INFO("Bridge initialized: %d switch + %d socket channels",
              cfg->switch_count, cfg->socket_count);
     for (uint8_t i = 1; i <= cfg->switch_count; i++) {
-        ESP_LOGI(TAG, "  switch ch%d -> DP %d", i, switch_channel_to_dp(i));
+        PR_INFO("  switch ch%d -> DP %d", i, switch_channel_to_dp(i));
     }
     for (uint8_t i = 1; i <= cfg->socket_count; i++) {
-        ESP_LOGI(TAG, "  socket ch%d -> DP %d", i, relay_channel_to_dp(i));
+        PR_INFO("  socket ch%d -> DP %d", i, relay_channel_to_dp(i));
     }
-    ESP_LOGI(TAG, "Socket auto-reset: %d ms, mask=0x%04X",
+    PR_INFO("Socket auto-reset: %d ms, mask=0x%04X",
              (int)cfg->socket_auto_reset_ms,
              cfg->socket_auto_reset_mask);
-    return ESP_OK;
+    return OPRT_OK;
 }
 
-esp_err_t dp_bridge_set_switch(uint8_t channel, bool value)
+OPERATE_RET dp_bridge_set_switch(uint8_t channel, bool value)
 {
     handle_switch_set(channel, value);
-    return ESP_OK;
+    return OPRT_OK;
 }

@@ -1,45 +1,23 @@
 #include <string.h>
 #include <stdlib.h>
-#include "esp_log.h"
-#include "esp_err.h"
-#include "nvs_flash.h"
-#include "nvs.h"
+#include "tal_api.h"
 #include "cJSON.h"
 #include "config.h"
 
-static const char *TAG = "config";
-
-/* NVS key names (max 15 chars each) */
-#define K_MQTT_HOST         "mqtt_host"
-#define K_MQTT_PORT         "mqtt_port"
-#define K_MQTT_USER         "mqtt_user"
-#define K_MQTT_PASS         "mqtt_pass"
-#define K_MQTT_PREFIX       "mqtt_prefix"
-#define K_SWITCH_COUNT      "sw_count"
-#define K_SOCKET_COUNT      "sk_count"
-#define K_SK_RESET_MASK     "sk_rst_mask"
-#define K_SK_RESET_MS       "sk_rst_ms"
-#define K_DEVICE_NAME       "dev_name"
-
-/* Helper: read string from NVS, keep default if key missing */
-static void nvs_read_str(nvs_handle_t h, const char *key, char *dst, size_t max_len)
+/* strlcpy is a BSD/ESP-IDF extension; TuyaOpen's libc may not have it */
+static size_t strlcpy_local(char *dst, const char *src, size_t dstsize)
 {
-    size_t len = max_len;
-    esp_err_t err = nvs_get_str(h, key, dst, &len);
-    if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) {
-        ESP_LOGW(TAG, "nvs_get_str(%s): %s", key, esp_err_to_name(err));
-    }
+    size_t srclen = strlen(src);
+    if (dstsize == 0) return srclen;
+    size_t n = (srclen < dstsize - 1) ? srclen : dstsize - 1;
+    memcpy(dst, src, n);
+    dst[n] = '\0';
+    return srclen;
 }
+#define strlcpy strlcpy_local
 
-static void nvs_write_str(nvs_handle_t h, const char *key, const char *val)
-{
-    esp_err_t err = nvs_set_str(h, key, val);
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "nvs_set_str(%s): %s", key, esp_err_to_name(err));
-    }
-}
-
-esp_err_t config_load(app_config_t *cfg)
+/* Config is persisted as a single JSON blob under one TAL KV key */
+OPERATE_RET config_load(app_config_t *cfg)
 {
     /* Compile-time defaults */
     memset(cfg, 0, sizeof(*cfg));
@@ -83,89 +61,60 @@ esp_err_t config_load(app_config_t *cfg)
 #endif
     cfg->socket_auto_reset_mask = 0xFFFF; /* all channels auto-reset by default */
 
-    /* Override with NVS values */
-    nvs_handle_t h;
-    esp_err_t err = nvs_open(CFG_NVS_NAMESPACE, NVS_READONLY, &h);
-    if (err == ESP_ERR_NVS_NOT_FOUND) {
-        ESP_LOGI(TAG, "No saved config, using defaults");
-        return ESP_OK;
-    }
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "nvs_open failed: %s", esp_err_to_name(err));
-        return err;
+    /* Override with saved values, if any */
+    uint8_t *buf = NULL;
+    size_t len = 0;
+    if (tal_kv_get(CFG_NVS_NAMESPACE, &buf, &len) != OPRT_OK || !buf) {
+        PR_INFO("No saved config, using defaults");
+        return OPRT_OK;
     }
 
-    nvs_read_str(h, K_MQTT_HOST,    cfg->mqtt_host,         sizeof(cfg->mqtt_host));
-    nvs_read_str(h, K_MQTT_USER,    cfg->mqtt_user,         sizeof(cfg->mqtt_user));
-    nvs_read_str(h, K_MQTT_PASS,    cfg->mqtt_pass,         sizeof(cfg->mqtt_pass));
-    nvs_read_str(h, K_MQTT_PREFIX,  cfg->mqtt_topic_prefix, sizeof(cfg->mqtt_topic_prefix));
-    nvs_read_str(h, K_DEVICE_NAME,  cfg->device_name,       sizeof(cfg->device_name));
+    char *json = malloc(len + 1);
+    if (!json) {
+        tal_kv_free(buf);
+        return OPRT_MALLOC_FAILED;
+    }
+    memcpy(json, buf, len);
+    json[len] = '\0';
+    tal_kv_free(buf);
 
-    uint16_t u16 = 0;
-    uint8_t  u8  = 0;
-    uint32_t u32 = 0;
-
-    if (nvs_get_u16(h, K_MQTT_PORT,    &u16) == ESP_OK) cfg->mqtt_port = u16;
-    if (nvs_get_u8 (h, K_SWITCH_COUNT, &u8)  == ESP_OK) cfg->switch_count = u8;
-    if (nvs_get_u8 (h, K_SOCKET_COUNT, &u8)  == ESP_OK) cfg->socket_count = u8;
-    if (nvs_get_u16(h, K_SK_RESET_MASK,&u16) == ESP_OK) cfg->socket_auto_reset_mask = u16;
-    if (nvs_get_u32(h, K_SK_RESET_MS,  &u32) == ESP_OK) cfg->socket_auto_reset_ms = u32;
-
-    nvs_close(h);
-    ESP_LOGI(TAG, "Config loaded from NVS");
-    return ESP_OK;
+    OPERATE_RET rt = config_apply_json(cfg, json);
+    free(json);
+    if (rt == OPRT_OK) {
+        PR_INFO("Config loaded from KV");
+    }
+    return OPRT_OK;
 }
 
-esp_err_t config_save(const app_config_t *cfg)
+OPERATE_RET config_save(const app_config_t *cfg)
 {
-    nvs_handle_t h;
-    esp_err_t err = nvs_open(CFG_NVS_NAMESPACE, NVS_READWRITE, &h);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "nvs_open RW failed: %s", esp_err_to_name(err));
-        return err;
-    }
+    char *json = config_to_json(cfg);
+    if (!json) return OPRT_MALLOC_FAILED;
 
-    nvs_write_str(h, K_MQTT_HOST,    cfg->mqtt_host);
-    nvs_write_str(h, K_MQTT_USER,    cfg->mqtt_user);
-    nvs_write_str(h, K_MQTT_PASS,    cfg->mqtt_pass);
-    nvs_write_str(h, K_MQTT_PREFIX,  cfg->mqtt_topic_prefix);
-    nvs_write_str(h, K_DEVICE_NAME,  cfg->device_name);
+    int ret = tal_kv_set(CFG_NVS_NAMESPACE, (const uint8_t *)json, strlen(json));
+    free(json);
 
-    nvs_set_u16(h, K_MQTT_PORT,       cfg->mqtt_port);
-    nvs_set_u8 (h, K_SWITCH_COUNT,    cfg->switch_count);
-    nvs_set_u8 (h, K_SOCKET_COUNT,    cfg->socket_count);
-    nvs_set_u16(h, K_SK_RESET_MASK,   cfg->socket_auto_reset_mask);
-    nvs_set_u32(h, K_SK_RESET_MS,     cfg->socket_auto_reset_ms);
-
-    err = nvs_commit(h);
-    nvs_close(h);
-
-    if (err == ESP_OK) {
-        ESP_LOGI(TAG, "Config saved to NVS");
+    if (ret == OPRT_OK) {
+        PR_INFO("Config saved to KV");
     } else {
-        ESP_LOGE(TAG, "nvs_commit failed: %s", esp_err_to_name(err));
+        PR_ERR("tal_kv_set failed: %d", ret);
     }
-    return err;
+    return ret;
 }
 
-esp_err_t config_erase(void)
+OPERATE_RET config_erase(void)
 {
-    nvs_handle_t h;
-    esp_err_t err = nvs_open(CFG_NVS_NAMESPACE, NVS_READWRITE, &h);
-    if (err != ESP_OK) return err;
-    err = nvs_erase_all(h);
-    if (err == ESP_OK) err = nvs_commit(h);
-    nvs_close(h);
-    ESP_LOGW(TAG, "Config erased from NVS");
-    return err;
+    int ret = tal_kv_del(CFG_NVS_NAMESPACE);
+    PR_WARN("Config erased from KV");
+    return ret;
 }
 
-esp_err_t config_apply_json(app_config_t *cfg, const char *json_str)
+OPERATE_RET config_apply_json(app_config_t *cfg, const char *json_str)
 {
     cJSON *root = cJSON_Parse(json_str);
     if (!root) {
-        ESP_LOGE(TAG, "JSON parse error");
-        return ESP_ERR_INVALID_ARG;
+        PR_ERR("JSON parse error");
+        return OPRT_CJSON_PARSE_ERR;
     }
 
     cJSON *item;
@@ -218,7 +167,7 @@ esp_err_t config_apply_json(app_config_t *cfg, const char *json_str)
 #undef JSON_INT
 
     cJSON_Delete(root);
-    return ESP_OK;
+    return OPRT_OK;
 }
 
 char *config_to_json(const app_config_t *cfg)

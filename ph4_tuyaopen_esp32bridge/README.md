@@ -57,18 +57,36 @@ Edit Kconfig (or `sdkconfig`) for HA MQTT broker settings.
 
 ### 4. Build
 
+This is a standalone TuyaOpen app (not an `idf.py`/ESP-IDF component like
+`ph4_tuya_esp32bridge`) — `tos.py` owns the build, see `CMakeLists.txt`.
+Run everything from `ph4_tuyaopen_esp32bridge/` (not from inside `tuyaopen/`):
+
 ```bash
-cd tuyaopen
-source export.sh
-tos build --project ../  --platform esp32
+source tuyaopen/export.sh          # bootstraps uv/python/deps into tuyaopen/.venv (first run only)
+tos.py config choice -c ESP32-C6.config   # select the board once; re-run if you switch chips
+tos.py build -v
 ```
 
-This is a standalone TuyaOpen app (not an `idf.py`/ESP-IDF component like
-`ph4_tuya_esp32bridge`) — `tos` owns the build, see `CMakeLists.txt`.
+The device is an **ESP32-C6**. `tos.py build` may prompt to update the
+platform submodule to a pinned commit on first run — answer `y`. First build
+also downloads the ESP-IDF toolchain for the target chip (multi-GB, one-time).
+
+If this is a fresh `tuyaopen` clone, also reapply the local SDK patch (an
+upstream `esp-dl` incompatibility unrelated to this app — see
+[`HISTORY.md`](./HISTORY.md) and `docs/tuyaopen-sdk-patches/`) after the
+first build attempt fetches `espressif__esp-dl`:
+
+```bash
+bash docs/tuyaopen-sdk-patches/fix-esp-dl-malloc-cap-simd.sh
+tos.py build -v   # rerun
+```
+
+Output: `dist/ph4_tuyaopen_esp32bridge_<version>/ph4_tuyaopen_esp32bridge_QIO_<version>.bin`
 
 ### 5. Pair with SmartLife
 
-1. Flash the firmware
+1. Flash the firmware: `tos.py flash -p /dev/ttyUSB0` (macOS: `/dev/cu.usbserial-XXXX`)
+   — then `tos.py monitor -p /dev/ttyUSB0` to watch boot logs
 2. On first boot, device enters **AP pairing mode** (LED blinks fast)
 3. Open SmartLife app → Add Device → Auto-scan or Manual → select your product
 4. Follow SmartLife prompts to provide WiFi credentials

@@ -11,11 +11,11 @@
  * HISTORY.md for the real (non-contiguous) layout assigned in the Tuya console.
  */
 
-esp_err_t dp_bridge_init(const app_config_t *cfg);
+OPERATE_RET dp_bridge_init(const app_config_t *cfg);
 
 void dp_bridge_on_tuya_dp(uint8_t dp_id, bool value, void *user_data);
 void dp_bridge_on_mqtt_msg(const char *topic, const char *data, void *user_data);
 void dp_bridge_on_tuya_state(int tuya_state, void *user_data);
 void dp_bridge_on_mqtt_state(int mqtt_state, void *user_data);
 
-esp_err_t dp_bridge_set_switch(uint8_t channel, bool value);
+OPERATE_RET dp_bridge_set_switch(uint8_t channel, bool value);

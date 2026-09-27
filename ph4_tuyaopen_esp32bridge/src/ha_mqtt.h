@@ -44,7 +44,7 @@ typedef void (*ha_mqtt_state_cb_t)(ha_mqtt_state_t state, void *user_data);
  * @param state_cb  Callback for connection state changes
  * @param user_data Passed to both callbacks
  */
-esp_err_t ha_mqtt_start(const app_config_t *cfg,
+OPERATE_RET ha_mqtt_start(const app_config_t *cfg,
                         ha_mqtt_msg_cb_t    msg_cb,
                         ha_mqtt_state_cb_t  state_cb,
                         void               *user_data);
@@ -55,27 +55,27 @@ esp_err_t ha_mqtt_start(const app_config_t *cfg,
  * value is sent as "ON" or "OFF" (HA convention).
  * Thread-safe, non-blocking (queued internally by ESP-MQTT).
  */
-esp_err_t ha_mqtt_publish_bool(const char *suffix, bool value);
+OPERATE_RET ha_mqtt_publish_bool(const char *suffix, bool value);
 
 /**
  * Publish a raw string payload.
  */
-esp_err_t ha_mqtt_publish(const char *suffix, const char *payload, int qos, bool retain);
+OPERATE_RET ha_mqtt_publish(const char *suffix, const char *payload, int qos, bool retain);
 
 /**
  * Publish the switch state for channel n (1-based).
  */
-esp_err_t ha_mqtt_publish_switch_state(uint8_t channel, bool value);
+OPERATE_RET ha_mqtt_publish_switch_state(uint8_t channel, bool value);
 
 /**
  * Publish the socket trigger state for channel n (1-based).
  */
-esp_err_t ha_mqtt_publish_socket_state(uint8_t channel, bool value);
+OPERATE_RET ha_mqtt_publish_socket_state(uint8_t channel, bool value);
 
 /**
  * Publish a JSON status message to {prefix}/status.
  */
-esp_err_t ha_mqtt_publish_status(const char *json);
+OPERATE_RET ha_mqtt_publish_status(const char *json);
 
 /**
  * Returns current MQTT connection state.

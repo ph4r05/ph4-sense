@@ -1,7 +1,9 @@
 #pragma once
 #include <stdbool.h>
 #include <stdint.h>
+#include "tuya_cloud_types.h"
 
+/* TAL KV key the whole config is stored under, as one JSON blob */
 #define CFG_NVS_NAMESPACE        "app_cfg"
 #define CFG_MAX_STR              128
 #define CFG_SWITCH_COUNT_MAX     16
@@ -31,26 +33,26 @@ typedef struct {
 } app_config_t;
 
 /**
- * Load config from NVS into *cfg.
- * Falls back to compile-time defaults for any field not saved in NVS.
+ * Load config from TAL KV storage into *cfg.
+ * Falls back to compile-time defaults for any field not saved.
  */
-esp_err_t config_load(app_config_t *cfg);
+OPERATE_RET config_load(app_config_t *cfg);
 
 /**
- * Save config to NVS.
+ * Save config to TAL KV storage.
  */
-esp_err_t config_save(const app_config_t *cfg);
+OPERATE_RET config_save(const app_config_t *cfg);
 
 /**
- * Erase all saved config from NVS (factory reset helper).
+ * Erase saved config from TAL KV storage (factory reset helper).
  */
-esp_err_t config_erase(void);
+OPERATE_RET config_erase(void);
 
 /**
  * Apply a JSON blob to an existing config struct.
  * Only keys present in the JSON are updated.
  */
-esp_err_t config_apply_json(app_config_t *cfg, const char *json_str);
+OPERATE_RET config_apply_json(app_config_t *cfg, const char *json_str);
 
 /**
  * Serialize config to a JSON string. Caller must free() the result.

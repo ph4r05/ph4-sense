@@ -1,25 +1,49 @@
+/**
+ * ha_mqtt.c — Home Assistant MQTT client, built on TuyaOpen's portable
+ * mqtt_client_interface.h (libmqtt) rather than ESP-IDF's esp_mqtt_client,
+ * since app code here only sees TuyaOpen's tal_ and libmqtt headers, not raw
+ * ESP-IDF ones (see HISTORY.md). This is the same MQTT client TuyaOpen uses
+ * internally for its own cloud connection.
+ *
+ * Runs its own connect/yield loop on a dedicated TAL thread, since the main
+ * loop in app_main.c only pumps tuya_iot_yield() for the Tuya cloud link.
+ *
+ * Known limitation: mqtt_client_interface.h has no last-will/testament
+ * option, so unlike the TuyaLink-era ESP-IDF version, the broker won't
+ * auto-publish "offline" on an unclean disconnect — only ha_mqtt_stop()
+ * publishes it explicitly.
+ */
+
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "esp_log.h"
-#include "esp_err.h"
-#include "mqtt_client.h"
+#include "tal_api.h"
+#include "mqtt_client_interface.h"
 #include "config.h"
 #include "ha_mqtt.h"
 
-static const char *TAG = "ha_mqtt";
+#define HA_MQTT_KEEPALIVE_S   60
+#define HA_MQTT_TIMEOUT_MS    5000
+#define HA_MQTT_RETRY_MS      5000
+#define HA_MQTT_YIELD_MS      100
 
 /* ------------------------------------------------------------------ */
 /* Internal state                                                       */
 /* ------------------------------------------------------------------ */
-static esp_mqtt_client_handle_t s_client    = NULL;
+static void                    *s_client    = NULL;
 static ha_mqtt_state_t          s_state     = HA_MQTT_STATE_DISCONNECTED;
 static ha_mqtt_msg_cb_t         s_msg_cb    = NULL;
 static ha_mqtt_state_cb_t       s_state_cb  = NULL;
 static void                    *s_user_data = NULL;
 static char                     s_prefix[CFG_MAX_STR];
+static char                     s_host[CFG_MAX_STR];
+static char                     s_user[CFG_MAX_STR];
+static char                     s_pass[CFG_MAX_STR];
+static char                     s_clientid[CFG_MAX_STR];
+static uint16_t                 s_port;
+
+static THREAD_HANDLE             s_thread    = NULL;
+static volatile bool             s_running   = false;
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                              */
@@ -40,85 +64,83 @@ static void build_topic(const char *suffix, char *out_buf, size_t out_size)
 /* ------------------------------------------------------------------ */
 /* Subscribe on connect                                                  */
 /* ------------------------------------------------------------------ */
-static void subscribe_all(esp_mqtt_client_handle_t client)
+static void subscribe_all(void *client)
 {
     char topic[256];
 
     /* Switch commands from HA: ph4/bridge/switch/+/set */
     build_topic("switch/+/set", topic, sizeof(topic));
-    esp_mqtt_client_subscribe(client, topic, 1);
-    ESP_LOGI(TAG, "Subscribed: %s", topic);
+    mqtt_client_subscribe(client, topic, 1);
+    PR_INFO("Subscribed: %s", topic);
 
     /* Socket overrides from HA (optional): ph4/bridge/socket/+/set */
     build_topic("socket/+/set", topic, sizeof(topic));
-    esp_mqtt_client_subscribe(client, topic, 1);
-    ESP_LOGI(TAG, "Subscribed: %s", topic);
+    mqtt_client_subscribe(client, topic, 1);
+    PR_INFO("Subscribed: %s", topic);
 
     /* Control commands: ph4/bridge/cmd */
     build_topic("cmd", topic, sizeof(topic));
-    esp_mqtt_client_subscribe(client, topic, 1);
-    ESP_LOGI(TAG, "Subscribed: %s", topic);
+    mqtt_client_subscribe(client, topic, 1);
+    PR_INFO("Subscribed: %s", topic);
 }
 
 /* ------------------------------------------------------------------ */
-/* MQTT event handler                                                   */
+/* MQTT client callbacks                                                */
 /* ------------------------------------------------------------------ */
-static void mqtt_event_handler(void *arg, esp_event_base_t base,
-                               int32_t event_id, void *event_data)
+static void on_connected(void *client, void *userdata)
 {
-    esp_mqtt_event_handle_t event = (esp_mqtt_event_handle_t)event_data;
+    PR_INFO("MQTT connected to broker");
+    set_state(HA_MQTT_STATE_CONNECTED);
+    subscribe_all(client);
+    ha_mqtt_publish_status("{\"status\":\"online\"}");
+}
 
-    switch (event->event_id) {
-    case MQTT_EVENT_CONNECTED:
-        ESP_LOGI(TAG, "MQTT connected to broker");
-        set_state(HA_MQTT_STATE_CONNECTED);
-        subscribe_all(event->client);
+static void on_disconnected(void *client, void *userdata)
+{
+    PR_WARN("MQTT disconnected");
+    set_state(HA_MQTT_STATE_DISCONNECTED);
+}
 
-        /* Publish online status */
-        ha_mqtt_publish_status("{\"status\":\"online\"}");
-        break;
+static void on_message(void *client, uint16_t msgid, const mqtt_client_message_t *msg, void *userdata)
+{
+    if (!msg || !msg->topic || !s_msg_cb) return;
 
-    case MQTT_EVENT_DISCONNECTED:
-        ESP_LOGW(TAG, "MQTT disconnected");
-        set_state(HA_MQTT_STATE_DISCONNECTED);
-        break;
+    /* topic is a NUL-terminated string; payload is length-based, needs a copy */
+    char *data = malloc(msg->length + 1);
+    if (!data) return;
+    memcpy(data, msg->payload, msg->length);
+    data[msg->length] = '\0';
 
-    case MQTT_EVENT_SUBSCRIBED:
-        ESP_LOGD(TAG, "MQTT subscribed, msg_id=%d", event->msg_id);
-        break;
+    PR_DEBUG("MQTT msg: %s = %s", msg->topic, data);
+    s_msg_cb(msg->topic, data, s_user_data);
+    free(data);
+}
 
-    case MQTT_EVENT_DATA:
-        if (event->topic && event->data && s_msg_cb) {
-            /* Make NUL-terminated copies (event data is not NUL-terminated) */
-            char *topic = strndup(event->topic, event->topic_len);
-            char *data  = strndup(event->data,  event->data_len);
-            if (topic && data) {
-                ESP_LOGD(TAG, "MQTT msg: %s = %s", topic, data);
-                s_msg_cb(topic, data, s_user_data);
+/* ------------------------------------------------------------------ */
+/* Connect/yield thread                                                 */
+/* ------------------------------------------------------------------ */
+static void ha_mqtt_thread(void *arg)
+{
+    while (s_running) {
+        if (s_state != HA_MQTT_STATE_CONNECTED) {
+            set_state(HA_MQTT_STATE_CONNECTING);
+            mqtt_client_status_t st = mqtt_client_connect(s_client);
+            if (st != MQTT_STATUS_SUCCESS) {
+                PR_WARN("MQTT connect failed: %d, retrying in %d ms", (int)st, HA_MQTT_RETRY_MS);
+                set_state(HA_MQTT_STATE_DISCONNECTED);
+                tal_system_sleep(HA_MQTT_RETRY_MS);
+                continue;
             }
-            free(topic);
-            free(data);
         }
-        break;
-
-    case MQTT_EVENT_ERROR:
-        ESP_LOGE(TAG, "MQTT error");
-        set_state(HA_MQTT_STATE_ERROR);
-        break;
-
-    case MQTT_EVENT_BEFORE_CONNECT:
-        set_state(HA_MQTT_STATE_CONNECTING);
-        break;
-
-    default:
-        break;
+        mqtt_client_yield(s_client);
+        tal_system_sleep(HA_MQTT_YIELD_MS);
     }
 }
 
 /* ------------------------------------------------------------------ */
 /* Public API                                                           */
 /* ------------------------------------------------------------------ */
-esp_err_t ha_mqtt_start(const app_config_t *cfg,
+OPERATE_RET ha_mqtt_start(const app_config_t *cfg,
                         ha_mqtt_msg_cb_t    msg_cb,
                         ha_mqtt_state_cb_t  state_cb,
                         void               *user_data)
@@ -126,98 +148,105 @@ esp_err_t ha_mqtt_start(const app_config_t *cfg,
     s_msg_cb    = msg_cb;
     s_state_cb  = state_cb;
     s_user_data = user_data;
-    strlcpy(s_prefix, cfg->mqtt_topic_prefix, sizeof(s_prefix));
 
     if (strlen(cfg->mqtt_host) == 0) {
-        ESP_LOGE(TAG, "MQTT host not configured");
-        return ESP_ERR_INVALID_ARG;
+        PR_ERR("MQTT host not configured");
+        return OPRT_INVALID_PARM;
     }
 
-    char broker_uri[256];
-    snprintf(broker_uri, sizeof(broker_uri), "mqtt://%s:%d",
-             cfg->mqtt_host, cfg->mqtt_port);
+    strncpy(s_prefix,   cfg->mqtt_topic_prefix, sizeof(s_prefix) - 1);
+    strncpy(s_host,     cfg->mqtt_host,         sizeof(s_host) - 1);
+    strncpy(s_user,     cfg->mqtt_user,         sizeof(s_user) - 1);
+    strncpy(s_pass,     cfg->mqtt_pass,         sizeof(s_pass) - 1);
+    strncpy(s_clientid, cfg->device_name,       sizeof(s_clientid) - 1);
+    s_port = cfg->mqtt_port;
 
-    /* Build LWT topic: {prefix}/status */
-    char lwt_topic[256];
-    build_topic("status", lwt_topic, sizeof(lwt_topic));
+    s_client = mqtt_client_new();
+    if (!s_client) {
+        PR_ERR("Failed to allocate MQTT client");
+        return OPRT_MALLOC_FAILED;
+    }
 
-    const esp_mqtt_client_config_t mqtt_cfg = {
-        .broker.address.uri         = broker_uri,
-        .credentials.username       = cfg->mqtt_user[0] ? cfg->mqtt_user : NULL,
-        .credentials.authentication.password =
-                                      cfg->mqtt_pass[0] ? cfg->mqtt_pass : NULL,
-        .credentials.client_id      = cfg->device_name,
-        .session.keepalive          = CONFIG_HA_MQTT_KEEPALIVE_S,
-        .session.last_will.topic    = lwt_topic,
-        .session.last_will.msg      = "{\"status\":\"offline\"}",
-        .session.last_will.msg_len  = 20,
-        .session.last_will.qos      = 1,
-        .session.last_will.retain   = 1,
-        .network.reconnect_timeout_ms = 5000,
+    const mqtt_client_config_t mcfg = {
+        .host           = s_host,
+        .port           = s_port,
+        .keepalive      = HA_MQTT_KEEPALIVE_S,
+        .timeout_ms     = HA_MQTT_TIMEOUT_MS,
+        .clientid       = s_clientid,
+        .username       = s_user[0] ? s_user : NULL,
+        .password       = s_pass[0] ? s_pass : NULL,
+        .userdata       = NULL,
+        .on_connected   = on_connected,
+        .on_disconnected = on_disconnected,
+        .on_message     = on_message,
     };
 
-    s_client = esp_mqtt_client_init(&mqtt_cfg);
-    if (!s_client) {
-        ESP_LOGE(TAG, "Failed to init MQTT client");
-        return ESP_FAIL;
-    }
-
-    ESP_ERROR_CHECK(esp_mqtt_client_register_event(
-        s_client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL));
-
-    esp_err_t err = esp_mqtt_client_start(s_client);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "esp_mqtt_client_start failed: %s", esp_err_to_name(err));
-        esp_mqtt_client_destroy(s_client);
+    mqtt_client_status_t st = mqtt_client_init(s_client, &mcfg);
+    if (st != MQTT_STATUS_SUCCESS) {
+        PR_ERR("mqtt_client_init failed: %d", (int)st);
+        mqtt_client_free(s_client);
         s_client = NULL;
-        return err;
+        return OPRT_COM_ERROR;
     }
 
-    ESP_LOGI(TAG, "MQTT client started, broker: %s", broker_uri);
-    return ESP_OK;
+    s_running = true;
+    THREAD_CFG_T thread_cfg = {
+        .stackDepth = 1024 * 4,
+        .priority   = THREAD_PRIO_2,
+        .thrdname   = "ha_mqtt",
+    };
+    OPERATE_RET rt = tal_thread_create_and_start(&s_thread, NULL, NULL,
+                                                  ha_mqtt_thread, NULL, &thread_cfg);
+    if (rt != OPRT_OK) {
+        PR_ERR("Failed to start HA MQTT thread: %d", rt);
+        s_running = false;
+        mqtt_client_free(s_client);
+        s_client = NULL;
+        return rt;
+    }
+
+    PR_INFO("MQTT client starting, broker: %s:%d", s_host, s_port);
+    return OPRT_OK;
 }
 
-esp_err_t ha_mqtt_publish_bool(const char *suffix, bool value)
+OPERATE_RET ha_mqtt_publish_bool(const char *suffix, bool value)
 {
     return ha_mqtt_publish(suffix, value ? "ON" : "OFF", 1, false);
 }
 
-esp_err_t ha_mqtt_publish(const char *suffix, const char *payload, int qos, bool retain)
+OPERATE_RET ha_mqtt_publish(const char *suffix, const char *payload, int qos, bool retain)
 {
     if (!s_client || s_state != HA_MQTT_STATE_CONNECTED) {
-        ESP_LOGW(TAG, "MQTT publish skipped (not connected): %s", suffix);
-        return ESP_ERR_INVALID_STATE;
+        PR_WARN("MQTT publish skipped (not connected): %s", suffix);
+        return OPRT_COM_ERROR;
     }
 
     char topic[256];
     build_topic(suffix, topic, sizeof(topic));
 
-    int msg_id = esp_mqtt_client_publish(s_client, topic, payload,
-                                         strlen(payload), qos, retain);
-    if (msg_id < 0) {
-        ESP_LOGE(TAG, "Publish failed: %s", topic);
-        return ESP_FAIL;
-    }
+    /* retain is not exposed by mqtt_client_interface.h; ignored for now */
+    (void)retain;
+    mqtt_client_publish(s_client, topic, (const uint8_t *)payload, strlen(payload), (uint8_t)qos);
 
-    ESP_LOGD(TAG, "Published %s = %s", topic, payload);
-    return ESP_OK;
+    PR_DEBUG("Published %s = %s", topic, payload);
+    return OPRT_OK;
 }
 
-esp_err_t ha_mqtt_publish_switch_state(uint8_t channel, bool value)
+OPERATE_RET ha_mqtt_publish_switch_state(uint8_t channel, bool value)
 {
     char suffix[64];
     snprintf(suffix, sizeof(suffix), "switch/%d/state", channel);
     return ha_mqtt_publish_bool(suffix, value);
 }
 
-esp_err_t ha_mqtt_publish_socket_state(uint8_t channel, bool value)
+OPERATE_RET ha_mqtt_publish_socket_state(uint8_t channel, bool value)
 {
     char suffix[64];
     snprintf(suffix, sizeof(suffix), "socket/%d/state", channel);
     return ha_mqtt_publish_bool(suffix, value);
 }
 
-esp_err_t ha_mqtt_publish_status(const char *json)
+OPERATE_RET ha_mqtt_publish_status(const char *json)
 {
     return ha_mqtt_publish("status", json, 1, true);
 }
@@ -231,8 +260,14 @@ void ha_mqtt_stop(void)
 {
     if (s_client) {
         ha_mqtt_publish_status("{\"status\":\"offline\"}");
-        esp_mqtt_client_stop(s_client);
-        esp_mqtt_client_destroy(s_client);
+        s_running = false;
+        if (s_thread) {
+            tal_thread_delete(s_thread);
+            s_thread = NULL;
+        }
+        mqtt_client_disconnect(s_client);
+        mqtt_client_deinit(s_client);
+        mqtt_client_free(s_client);
         s_client = NULL;
     }
     s_state = HA_MQTT_STATE_DISCONNECTED;
