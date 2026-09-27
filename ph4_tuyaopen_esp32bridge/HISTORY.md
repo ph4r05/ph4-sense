@@ -259,11 +259,18 @@ ap using tls + psk` secure pairing listener up on port 6668. A `tuya>` CLI
 prompt (the `switch`/`reset`/`mem` commands from `app_main.c`) also came up
 cleanly.
 
-Not yet done: actually completing SmartLife pairing (device needs to be on
-the same network as the phone doing the pairing — deferred until on home
-WiFi), and verifying HA MQTT bridging end-to-end (still blocked on the
-missing runtime config mechanism noted in the "what to test" discussion —
-no Kconfig defaults or CLI setter for `mqtt_host` yet).
+**Update, same day, once on home WiFi:** SmartLife pairing completed
+successfully — the device activated and shows up with a generic panel
+listing all the switch/relay DPs. This is the thing attempt 1 (TuyaLink)
+could never do (see "Attempt 1" above — error 11, no real pairing flow);
+confirms the SmartLife-app pairing path TuyaOpen was chosen for actually
+works end-to-end on real hardware, not just in theory.
+
+Not yet done: DP round-trip verification (Tuya console/Device Debugging ↔
+device, especially the freshly-created 121-126 relay-trigger DPs), and
+verifying HA MQTT bridging end-to-end (still blocked on the missing
+runtime config mechanism noted in the "what to test" discussion — no
+Kconfig defaults or CLI setter for `mqtt_host` yet).
 
 ## Where to look for more detail
 
