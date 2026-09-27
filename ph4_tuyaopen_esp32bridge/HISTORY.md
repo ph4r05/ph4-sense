@@ -199,7 +199,71 @@ files. Full writeup + a script to reapply it after a fresh `tuyaopen` clone:
 
 Result: `tos.py build` for ESP32-C6 completes —
 `dist/ph4_tuyaopen_esp32bridge_1.0.0/ph4_tuyaopen_esp32bridge_QIO_1.0.0.bin`.
-Not yet flashed or tested on real hardware; SmartLife pairing is unverified.
+
+## First hardware flash + boot, 2026-09-27
+
+The physical board has two USB-C connectors: **CH343** (an external
+USB-UART bridge, WCH vendor ID `0x1A86`, shows up on macOS as
+`/dev/cu.usbmodemXXXX` — not `wchusbserial*`, since modern macOS's built-in
+CDC-ACM driver handles it directly, no WCH kernel extension needed) and the
+**ESP32-C6's native USB** (its built-in USB-Serial-JTAG peripheral,
+identifies via `ioreg` as `"USB Vendor Name" = "Espressif"` /
+`"USB Product Name" = "USB JTAG_serial debug unit"`).
+
+**Flashing:** TuyaOpen's own `tos.py flash` (wrapping Tuya's `tyutool_cli`)
+could not connect over the native USB port — its auto-reset-into-bootloader
+handshake didn't work there (`could not connect to ESP32C6`), even after a
+manual BOOT+RESET button sequence. Standard **`esptool.py`** (already on
+PATH via pyenv, separate from TuyaOpen's bundled `tyutool_cli`) connected
+and flashed over the same native USB port immediately, no manual
+BOOT/RESET needed — its auto-reset sequence for USB-Serial-JTAG is simply
+more robust than `tyutool_cli`'s. Used directly:
+```bash
+esptool.py --chip esp32c6 --port /dev/cu.usbmodemXXXX --baud 460800 \
+  --before default_reset --after hard_reset write_flash -z \
+  --flash_mode dio --flash_size 8MB --flash_freq 40m \
+  0x0 dist/ph4_tuyaopen_esp32bridge_1.0.0/ph4_tuyaopen_esp32bridge_QIO_1.0.0.bin
+```
+(this also surfaced the flash-size mismatch below — the original 16MB-sized
+image wouldn't fit until that was fixed).
+
+**Flash-size mismatch:** `esptool.py flash_id` reported the chip's actual
+flash as 8MB, but the only ESP32-C6 board config TuyaOpen ships hardcodes
+16MB (see `docs/tuyaopen-sdk-patches/` for the fix — three coordinated
+patches: board Kconfig, a per-chip sdkconfig seed file, and the partition
+table). Merged image dropped from 15.5MB (didn't fit) to 7.1MB after the
+fix.
+
+**Console output goes out CH343, not native USB.** The default console
+config is `CONFIG_ESP_CONSOLE_UART_DEFAULT=y` (physical UART0 pins, wired
+to CH343) with USB-Serial-JTAG only as a secondary/early-boot console — so
+`tos.py monitor` / any serial terminal needs the **CH343** port to see the
+running app's log output (`PR_INFO`/`PR_WARN`/etc.), even though flashing
+works fine over the native USB port.
+
+**First boot result (via `esptool.py` flash + serial monitor over CH343):**
+clean boot, no crashes/watchdog resets. All ported logging came through
+correctly (confirms the TAL API port compiles *and* runs correctly, not
+just compiles) — the DP mapping table printed exactly as designed (switch
+ch1-6 → DP 1-6, ch7-16 → DP 101-110; socket ch1-6 → DP 121-126, ch7-16 →
+DP 111-120), `tal_kv` (LittleFS) read/write worked (expected "lfs key not
+found" on a blank device), and it read the hardcoded UUID/AuthKey from
+`tuya_config.local.h` since no prior activation was stored. Most
+importantly, it correctly entered **pairing mode**:
+```
+Device entering pairing mode — use SmartLife app to add
+```
+broadcasting a WiFi AP (`SmartLife-FE37`, DHCP on 192.168.4.1) and BLE
+advertising simultaneously (dual-mode pairing), with the `ap_netcfg`/`tuya
+ap using tls + psk` secure pairing listener up on port 6668. A `tuya>` CLI
+prompt (the `switch`/`reset`/`mem` commands from `app_main.c`) also came up
+cleanly.
+
+Not yet done: actually completing SmartLife pairing (device needs to be on
+the same network as the phone doing the pairing — deferred until on home
+WiFi), and verifying HA MQTT bridging end-to-end (still blocked on the
+missing runtime config mechanism noted in the "what to test" discussion —
+no Kconfig defaults or CLI setter for `mqtt_host` yet).
 
 ## Where to look for more detail
 

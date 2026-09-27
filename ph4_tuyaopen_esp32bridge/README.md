@@ -71,26 +71,57 @@ The device is an **ESP32-C6**. `tos.py build` may prompt to update the
 platform submodule to a pinned commit on first run — answer `y`. First build
 also downloads the ESP-IDF toolchain for the target chip (multi-GB, one-time).
 
-If this is a fresh `tuyaopen` clone, also reapply the local SDK patch (an
-upstream `esp-dl` incompatibility unrelated to this app — see
-[`HISTORY.md`](./HISTORY.md) and `docs/tuyaopen-sdk-patches/`) after the
-first build attempt fetches `espressif__esp-dl`:
+If this is a fresh `tuyaopen` clone, also reapply the local SDK patches (see
+[`HISTORY.md`](./HISTORY.md) and `docs/tuyaopen-sdk-patches/` for why each
+one is needed — none are specific to this app, they're upstream/hardware
+mismatches):
 
 ```bash
-bash docs/tuyaopen-sdk-patches/fix-esp-dl-malloc-cap-simd.sh
+bash docs/tuyaopen-sdk-patches/fix-esp-dl-malloc-cap-simd.sh     # after first build fetches espressif__esp-dl
+bash docs/tuyaopen-sdk-patches/fix-esp32c6-8mb-flash.sh          # our board has 8MB flash; TuyaOpen's ESP32-C6 config defaults to 16MB
+rm -f tuyaopen/platform/ESP32/tuya_open_sdk/sdkconfig
+tos.py config choice -c ESP32-C6.config
 tos.py build -v   # rerun
 ```
 
 Output: `dist/ph4_tuyaopen_esp32bridge_<version>/ph4_tuyaopen_esp32bridge_QIO_<version>.bin`
+(~7.1MB after the 8MB-flash patch — it's 15.5MB and won't fit on an 8MB chip
+without it).
 
-### 5. Pair with SmartLife
+### 5. Flash and pair with SmartLife
 
-1. Flash the firmware: `tos.py flash -p /dev/ttyUSB0` (macOS: `/dev/cu.usbserial-XXXX`)
-   — then `tos.py monitor -p /dev/ttyUSB0` to watch boot logs
-2. On first boot, device enters **AP pairing mode** (LED blinks fast)
-3. Open SmartLife app → Add Device → Auto-scan or Manual → select your product
-4. Follow SmartLife prompts to provide WiFi credentials
-5. Device activates and appears in your SmartLife home
+The dev board used here has **two USB-C ports** — identify them with `ioreg
+-p IOUSB -w0 -l | grep -i "USB Vendor Name\|USB Product Name"` if unsure:
+
+- **CH343** (external USB-UART bridge, WCH `0x1A86`) — this is where the
+  running app's console log actually goes (`CONFIG_ESP_CONSOLE_UART_DEFAULT`
+  is UART0). Use this port for **monitoring**.
+- **Native USB** (the C6's built-in USB-Serial-JTAG, shows as `"Espressif" /
+  "USB JTAG_serial debug unit"` in `ioreg`) — use this port for **flashing**.
+  TuyaOpen's own `tos.py flash` (`tyutool_cli`) couldn't get its
+  auto-reset-into-bootloader handshake to work reliably over this port even
+  with a manual BOOT+RESET; plain `esptool.py` (`pip install esptool` if not
+  already on PATH) connects and flashes immediately with no button-pressing:
+
+```bash
+esptool.py --chip esp32c6 --port /dev/cu.usbmodemXXXX --baud 460800 \
+  --before default_reset --after hard_reset write_flash -z \
+  --flash_mode dio --flash_size 8MB --flash_freq 40m \
+  0x0 dist/ph4_tuyaopen_esp32bridge_1.0.0/ph4_tuyaopen_esp32bridge_QIO_1.0.0.bin
+```
+
+Then, on the **CH343** port:
+```bash
+tos.py monitor -p /dev/cu.usbmodemYYYY
+```
+
+1. On first boot (or after a factory reset), the device enters pairing mode
+   — logs `Device entering pairing mode`, broadcasts a `SmartLife-XXXX` WiFi
+   AP and BLE advertisement simultaneously
+2. Open SmartLife app → Add Device → Auto-scan or Manual → select your product
+3. Follow SmartLife prompts to provide your home WiFi credentials
+4. Watch the monitor log for `TUYA_EVENT_ACTIVATE_SUCCESSED` — device
+   activates and appears in your SmartLife home
 
 ### DP Layout
 

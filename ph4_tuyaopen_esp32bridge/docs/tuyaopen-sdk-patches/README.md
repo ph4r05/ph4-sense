@@ -46,3 +46,58 @@ optimization this device's firmware never exercises anyway.
 ```bash
 bash ph4_tuyaopen_esp32bridge/docs/tuyaopen-sdk-patches/fix-esp-dl-malloc-cap-simd.sh
 ```
+
+## ESP32-C6 board config hardcodes 16MB flash; our chip is 8MB
+
+**Files patched:**
+
+- `tuyaopen/boards/ESP32/ESP32-C6/Kconfig` (top-level `tuyaopen` repo)
+- `tuyaopen/platform/ESP32/tuya_open_sdk/sdkconfig_esp32c6` (nested
+  `TuyaOpen-esp32` platform repo)
+- `tuyaopen/platform/ESP32/tuya_open_sdk/partitions.csv` (gitignored inside
+  that nested repo — meant to be hand-set per board, not tracked)
+
+**Problem:** the only generic `ESP32-C6` board config TuyaOpen ships
+hardcodes `select PLATFORM_FLASHSIZE_16M` in its Kconfig — there's no 8MB
+variant (only `WAVESHARE_ESP32C6_DEV_KIT_N16`, also 16MB, exists as an
+alternative). Our actual hardware has an **8MB** flash chip (confirmed via
+`esptool.py flash_id`: `Detected flash size: 8MB`). Building with the
+16MB-sized default `partitions.csv` produces a firmware image where the
+`model` (voice-model) partition sits at offset `0xED0000` (~14.8MB) — past
+the end of an 8MB chip entirely — so the merged flash image comes out to
+15.5MB and physically cannot be written:
+
+```
+A fatal error occurred: File ...QIO_1.0.0.bin (length 15532036) at offset 0
+will not fit in 8388608 bytes of flash.
+```
+
+**Fix:** three coordinated changes, since flash size is seeded in two
+different places before Kconfig ever runs, and the partition table is a
+separate, unrelated hand-maintained file:
+
+1. `boards/ESP32/ESP32-C6/Kconfig`: `select PLATFORM_FLASHSIZE_16M` →
+   `select PLATFORM_FLASHSIZE_8M` (this alone isn't sufficient — see next).
+2. `tuya_open_sdk/sdkconfig_esp32c6`: this is a per-chip seed file that
+   `build_setup.py`'s "set-target" step requires and copies in before
+   Kconfig merging runs; its hardcoded `CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y`
+   would otherwise win regardless of the board Kconfig default. Flipped to
+   `8MB` to match.
+3. `tuya_open_sdk/partitions.csv`: not derived from the flash-size Kconfig
+   at all (checked `build_setup.py` — no such logic exists). TuyaOpen ships
+   ready-made `partitions_4M.csv`/`_8M.csv`/`_16M.csv`/`_32M.csv` reference
+   layouts; copied `partitions_8M.csv` over the active `partitions.csv`
+   (whose 8MB layout fits exactly: last partition ends at `0x800000` = 8MB).
+
+After patching, the stale 16MB `sdkconfig` (and the `.build`/`build` dirs
+seeded from it) must be cleared and regenerated — see the script below.
+
+**Reapply after a fresh `tuyaopen` clone:**
+
+```bash
+bash ph4_tuyaopen_esp32bridge/docs/tuyaopen-sdk-patches/fix-esp32c6-8mb-flash.sh
+rm -f ph4_tuyaopen_esp32bridge/tuyaopen/platform/ESP32/tuya_open_sdk/sdkconfig
+cd ph4_tuyaopen_esp32bridge && source tuyaopen/export.sh
+tos.py config choice -c ESP32-C6.config
+tos.py build -v
+```
