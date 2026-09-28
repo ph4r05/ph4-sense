@@ -173,8 +173,12 @@ OPERATE_RET ha_mqtt_start(const app_config_t *cfg,
         .keepalive      = HA_MQTT_KEEPALIVE_S,
         .timeout_ms     = HA_MQTT_TIMEOUT_MS,
         .clientid       = s_clientid,
-        .username       = s_user[0] ? s_user : NULL,
-        .password       = s_pass[0] ? s_pass : NULL,
+        /* TuyaOpen's mqtt_client_wrapper.c calls strlen(username/password)
+         * unconditionally in mqtt_client_connect() with no NULL check -- it
+         * crashes (Guru Meditation, Load access fault) if these are NULL.
+         * Empty strings are safe (strlen("") == 0) for an anonymous broker. */
+        .username       = s_user,
+        .password       = s_pass,
         .userdata       = NULL,
         .on_connected   = on_connected,
         .on_disconnected = on_disconnected,

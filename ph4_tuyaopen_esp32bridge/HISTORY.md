@@ -272,6 +272,51 @@ verifying HA MQTT bridging end-to-end (still blocked on the missing
 runtime config mechanism noted in the "what to test" discussion — no
 Kconfig defaults or CLI setter for `mqtt_host` yet).
 
+## HA MQTT bridge live end-to-end, 2026-09-28
+
+Gave the device a name and a broker to talk to: `src/bridge_defaults.h` now
+holds `BRIDGE_DEFAULT_MQTT_HOST` (`10.0.1.103` — a LAN IP, not a credential,
+so a plain header define per CLAUDE.md policy), `BRIDGE_DEFAULT_DEVICE_NAME`
+(`ph4bridge01`), and `BRIDGE_DEFAULT_MQTT_TOPIC_PREFIX` (`ph4/bridge01`),
+referenced from `config.c` instead of the dead `#ifdef CONFIG_HA_MQTT_HOST`
+path that used to be there (that Kconfig symbol was never actually defined
+anywhere — this app isn't registered as its own idf_component in
+TuyaOpen's Kconfig-scanning sense, just linked into "main" as a plain CMake
+library, so reaching it would mean patching the vendored SDK's Kconfig
+include chain; not worth it for one deployment-specific header).
+
+First reflash with this crashed in a loop (~every 11s) right after
+connecting to Tuya cloud and starting the HA MQTT thread. Root cause via
+`addr2line` (see `DEBUGGING.md` for the full decode walkthrough): TuyaOpen's
+own `libmqtt/src/mqtt_client_wrapper.c:208` calls
+`strlen(context->config.username)` / `strlen(...password)` **unconditionally**
+in `mqtt_client_connect()`, no NULL check — and `ha_mqtt.c` was passing
+`NULL` for both when no MQTT auth is configured (the usual way to say "no
+auth" for most clients). Fixed by passing empty strings instead of NULL in
+`ha_mqtt.c` — the bug is in the vendored SDK, but the fix lives entirely on
+our side, so no `docs/tuyaopen-sdk-patches/` entry was needed for this one.
+
+After the fix: clean boot, no crash, `ha_mqtt` connects to `10.0.1.103:1883`
+and both bridge directions confirmed live over real MQTT traffic
+(`mosquitto_sub`/`mosquitto_pub`, not just serial log inspection, which
+turned out to be unreliable for this — see `DEBUGGING.md`'s serial-buffer-
+backlog section):
+- **Tuya → MQTT**: toggling a switch published `ph4/bridge01/switch/{n}/state`
+  immediately.
+- **MQTT → Tuya**: `mosquitto_pub .../switch/1/set ON` echoed back
+  `.../switch/1/state ON` (then `OFF`), confirming `tuya_cloud_report_bool()`
+  ran and the DP round-tripped through Tuya cloud successfully.
+
+Also confirmed empirically (multiple reflashes this session, all without
+re-pairing): reflashing the app does not disturb WiFi/activation state,
+since the merged image's write range (`0x0`–`0x6d0fff`) never reaches the
+`tuya` (`0x7C0000`) or `factory_nvs` (`0x7FC000`) partitions where that
+state actually lives. See `DEBUGGING.md`.
+
+Not yet done: the `socket`/`relay_trigger` (momentary, DP 121-126/111-120)
+channels haven't been round-trip tested yet, only `switch`. HA-side
+entities/automations for the new MQTT topics haven't been built.
+
 ## Where to look for more detail
 
 - `ph4_tuya_esp32bridge/docs/sdk-selection/README.md` — full SDK comparison

@@ -3,6 +3,7 @@
 #include "tal_api.h"
 #include "cJSON.h"
 #include "config.h"
+#include "bridge_defaults.h"
 
 /* strlcpy is a BSD/ESP-IDF extension; TuyaOpen's libc may not have it */
 static size_t strlcpy_local(char *dst, const char *src, size_t dstsize)
@@ -22,27 +23,14 @@ OPERATE_RET config_load(app_config_t *cfg)
     /* Compile-time defaults */
     memset(cfg, 0, sizeof(*cfg));
 
-#ifdef CONFIG_HA_MQTT_HOST
-    strlcpy(cfg->mqtt_host,          CONFIG_HA_MQTT_HOST,         sizeof(cfg->mqtt_host));
-#endif
-#ifdef CONFIG_HA_MQTT_USER
-    strlcpy(cfg->mqtt_user,          CONFIG_HA_MQTT_USER,         sizeof(cfg->mqtt_user));
-#endif
-#ifdef CONFIG_HA_MQTT_PASS
-    strlcpy(cfg->mqtt_pass,          CONFIG_HA_MQTT_PASS,         sizeof(cfg->mqtt_pass));
-#endif
-#ifdef CONFIG_HA_MQTT_TOPIC_PREFIX
-    strlcpy(cfg->mqtt_topic_prefix,  CONFIG_HA_MQTT_TOPIC_PREFIX, sizeof(cfg->mqtt_topic_prefix));
-#else
-    strlcpy(cfg->mqtt_topic_prefix,  "ph4/bridge",                sizeof(cfg->mqtt_topic_prefix));
-#endif
-    strlcpy(cfg->device_name,        "ph4-bridge",                sizeof(cfg->device_name));
+    strlcpy(cfg->mqtt_host,          BRIDGE_DEFAULT_MQTT_HOST,         sizeof(cfg->mqtt_host));
+    strlcpy(cfg->mqtt_topic_prefix,  BRIDGE_DEFAULT_MQTT_TOPIC_PREFIX, sizeof(cfg->mqtt_topic_prefix));
+    strlcpy(cfg->device_name,        BRIDGE_DEFAULT_DEVICE_NAME,       sizeof(cfg->device_name));
+    cfg->mqtt_port = BRIDGE_DEFAULT_MQTT_PORT;
 
-#ifdef CONFIG_HA_MQTT_PORT
-    cfg->mqtt_port = CONFIG_HA_MQTT_PORT;
-#else
-    cfg->mqtt_port = 1883;
-#endif
+    /* mqtt_user/mqtt_pass: no compile-time default -- broker allows
+     * anonymous LAN clients; set via config_apply_json()+config_save() if
+     * that ever changes. */
 
 #ifdef CONFIG_BRIDGE_SWITCH_COUNT
     cfg->switch_count = CONFIG_BRIDGE_SWITCH_COUNT;
