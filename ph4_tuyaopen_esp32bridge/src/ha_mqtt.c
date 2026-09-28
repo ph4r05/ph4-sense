@@ -68,15 +68,23 @@ static void subscribe_all(void *client)
 {
     char topic[256];
 
-    /* Switch commands from HA: ph4/bridge/switch/+/set */
-    build_topic("switch/+/set", topic, sizeof(topic));
-    mqtt_client_subscribe(client, topic, 1);
-    PR_INFO("Subscribed: %s", topic);
+    /* Switch/socket commands from HA. Deliberately NOT a "+/+" wildcard --
+     * that would also match our own .../switch/{n}/state publishes and
+     * cause the device to receive (and act on, see parse_mqtt_topic()'s
+     * exact-match fix) its own state echoes as if they were commands. */
+    static const char *leaves[] = {"set", "toggle", "pulse"};
+    char suffix[32];
+    for (size_t i = 0; i < sizeof(leaves) / sizeof(leaves[0]); i++) {
+        snprintf(suffix, sizeof(suffix), "switch/+/%s", leaves[i]);
+        build_topic(suffix, topic, sizeof(topic));
+        mqtt_client_subscribe(client, topic, 1);
+        PR_INFO("Subscribed: %s", topic);
 
-    /* Socket overrides from HA (optional): ph4/bridge/socket/+/set */
-    build_topic("socket/+/set", topic, sizeof(topic));
-    mqtt_client_subscribe(client, topic, 1);
-    PR_INFO("Subscribed: %s", topic);
+        snprintf(suffix, sizeof(suffix), "socket/+/%s", leaves[i]);
+        build_topic(suffix, topic, sizeof(topic));
+        mqtt_client_subscribe(client, topic, 1);
+        PR_INFO("Subscribed: %s", topic);
+    }
 
     /* Control commands: ph4/bridge/cmd */
     build_topic("cmd", topic, sizeof(topic));

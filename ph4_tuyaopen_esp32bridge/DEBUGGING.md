@@ -153,3 +153,35 @@ reconnects to WiFi and hits `TUYA_EVENT_BINDED_NOTIFY`/
 `TUYA_EVENT_MQTT_CONNECTED` immediately on boot, with no AP-pairing-mode
 re-entry (which is what a genuinely wiped/factory-reset device does
 instead).
+
+## Diagnosing an MQTT feedback/self-echo loop
+
+Symptom: a relay/switch cycles rapidly with no obvious external trigger.
+**Cut power to the device immediately if this happens** — don't wait to
+debug it first; rapid relay cycling risks physically damaging the relay
+contacts and whatever it's switching (this happened once during
+development — see HISTORY.md's "MQTT self-echo feedback loop" section).
+
+Once safe to investigate:
+
+1. Check whether any MQTT subscription topic filter (`ha_mqtt.c`'s
+   `subscribe_all()`) could match one of the device's own **publish**
+   topics. A `+` wildcard is the usual culprit — e.g. `switch/+/+` matches
+   both `switch/{n}/set` (intended) and `switch/{n}/state` (the device's
+   own publish, not intended). Compare the subscribe list against every
+   `ha_mqtt_publish_*` call site.
+2. If a topic parser uses `sscanf()` with a literal suffix in the format
+   string (e.g. `sscanf(topic, "/switch/%d/set", &channel)`), don't trust
+   a return value of 1 as proof the whole format matched — `sscanf` counts
+   a `%d` conversion as successful and returns 1 even if a *later* literal
+   character in the format fails to match the input, it just stops
+   scanning at that point. `"/switch/2/state"` against format
+   `"/switch/%d/set"` returns 1 with `channel = 2`, incorrectly. Parse the
+   trailing token separately (e.g. `%s`) and compare it with `strcmp`
+   instead of embedding it as format-string literal text.
+3. To confirm a loop live: `mosquitto_sub -h <broker> -t '<prefix>/#' -v`
+   and watch for the same topic repeating faster than any human/automation
+   action could produce it. A live serial capture (see the buffering notes
+   above) showing the same `ha_mqtt.c: MQTT msg: ...` / `Published ...`
+   pair repeating confirms it's the device retriggering itself, not an
+   external system.

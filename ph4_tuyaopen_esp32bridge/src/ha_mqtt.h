@@ -30,9 +30,18 @@ typedef void (*ha_mqtt_state_cb_t)(ha_mqtt_state_t state, void *user_data);
  * Initialize and start the HA MQTT client.
  *
  * Subscribes to:
- *   {prefix}/switch/+/set  — switch commands from HA (HA -> ESP32 -> Tuya)
- *   {prefix}/socket/+/set  — socket overrides from HA (rare, mostly informational)
- *   {prefix}/cmd           — control commands (e.g. "reset", "status")
+ *   {prefix}/switch/+/set     — switch commands from HA (HA -> ESP32 -> Tuya)
+ *   {prefix}/switch/+/toggle  — flip current switch state; any payload,
+ *                               no need to read state first
+ *   {prefix}/switch/+/pulse   — momentary ON then auto-reset OFF after
+ *                               socket_auto_reset_ms, for a normally-
+ *                               persistent switch channel; any payload
+ *   {prefix}/socket/+/set     — direct socket set (no auto-reset applied)
+ *   {prefix}/socket/+/toggle  — flip current socket state (no auto-reset);
+ *                               any payload
+ *   {prefix}/socket/+/pulse   — momentary ON then auto-reset OFF, same as a
+ *                               Tuya-side trigger; any payload
+ *   {prefix}/cmd              — control commands (e.g. "reset", "status")
  *
  * Publishes:
  *   {prefix}/switch/{n}/state  — current switch state (for HA feedback)

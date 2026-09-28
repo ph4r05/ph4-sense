@@ -39,6 +39,7 @@ static bool s_switch_state[CFG_SWITCH_COUNT_MAX] = {false};
 static bool s_socket_state[CFG_SOCKET_COUNT_MAX] = {false};
 
 static socket_reset_ctx_t s_reset_ctx[CFG_SOCKET_COUNT_MAX];
+static socket_reset_ctx_t s_switch_pulse_ctx[CFG_SWITCH_COUNT_MAX];
 
 /* ------------------------------------------------------------------ */
 /* Auto-reset timer callback                                            */
@@ -53,6 +54,18 @@ static void socket_auto_reset_cb(TIMER_ID timer_id, void *arg)
     s_socket_state[ch - 1] = false;
     tuya_cloud_report_bool(relay_channel_to_dp(ch), false);
     ha_mqtt_publish_socket_state(ch, false);
+}
+
+static void switch_pulse_reset_cb(TIMER_ID timer_id, void *arg)
+{
+    socket_reset_ctx_t *ctx = (socket_reset_ctx_t *)arg;
+    uint8_t ch = ctx->channel;
+
+    PR_INFO("Switch ch%d pulse -> OFF", ch);
+
+    s_switch_state[ch - 1] = false;
+    tuya_cloud_report_bool(switch_channel_to_dp(ch), false);
+    ha_mqtt_publish_switch_state(ch, false);
 }
 
 /* ------------------------------------------------------------------ */
@@ -99,6 +112,75 @@ static void handle_switch_set(uint8_t channel, bool value)
     s_switch_state[channel - 1] = value;
     tuya_cloud_report_bool(switch_channel_to_dp(channel), value);
     ha_mqtt_publish_switch_state(channel, value);
+}
+
+/* Direct socket set (no auto-reset) -- shared by the /set and /toggle
+ * MQTT handlers. Caller must bounds-check channel first. */
+static void set_socket_direct(uint8_t channel, bool value)
+{
+    PR_INFO("Socket ch%d manually set to %s by HA", channel, value ? "ON" : "OFF");
+    s_socket_state[channel - 1] = value;
+    tuya_cloud_report_bool(relay_channel_to_dp(channel), value);
+    ha_mqtt_publish_socket_state(channel, value);
+}
+
+/* ------------------------------------------------------------------ */
+/* HA-triggered momentary pulse (switch or socket)                      */
+/*                                                                       */
+/* Unlike handle_socket_trigger() (called when a DP change already came */
+/* FROM Tuya, so the ON edge doesn't need reporting back), these report */
+/* the ON edge to Tuya cloud too, since it's new information from HA.   */
+/* ------------------------------------------------------------------ */
+static void handle_switch_pulse(uint8_t channel)
+{
+    if (channel < 1 || channel > s_cfg->switch_count) {
+        PR_WARN("Switch channel %d out of range (pulse)", channel);
+        return;
+    }
+    uint32_t pulse_ms = s_cfg->socket_auto_reset_ms;
+    if (pulse_ms == 0) {
+        PR_WARN("Switch ch%d pulse requested but auto_reset_ms=0, ignoring", channel);
+        return;
+    }
+
+    PR_INFO("Switch ch%d pulse -> ON (%d ms, from HA)", channel, (int)pulse_ms);
+    s_switch_state[channel - 1] = true;
+    tuya_cloud_report_bool(switch_channel_to_dp(channel), true);
+    ha_mqtt_publish_switch_state(channel, true);
+
+    socket_reset_ctx_t *ctx = &s_switch_pulse_ctx[channel - 1];
+    if (ctx->timer == NULL) {
+        ctx->channel = channel;
+        tal_sw_timer_create(switch_pulse_reset_cb, ctx, &ctx->timer);
+    }
+    tal_sw_timer_stop(ctx->timer);
+    tal_sw_timer_start(ctx->timer, pulse_ms, TAL_TIMER_ONCE);
+}
+
+static void handle_socket_pulse(uint8_t channel)
+{
+    if (channel < 1 || channel > s_cfg->socket_count) {
+        PR_WARN("Socket channel %d out of range (pulse)", channel);
+        return;
+    }
+    uint32_t pulse_ms = s_cfg->socket_auto_reset_ms;
+    if (pulse_ms == 0) {
+        PR_WARN("Socket ch%d pulse requested but auto_reset_ms=0, ignoring", channel);
+        return;
+    }
+
+    PR_INFO("Socket ch%d pulse -> ON (%d ms, from HA)", channel, (int)pulse_ms);
+    s_socket_state[channel - 1] = true;
+    tuya_cloud_report_bool(relay_channel_to_dp(channel), true);
+    ha_mqtt_publish_socket_state(channel, true);
+
+    socket_reset_ctx_t *ctx = &s_reset_ctx[channel - 1];
+    if (ctx->timer == NULL) {
+        ctx->channel = channel;
+        tal_sw_timer_create(socket_auto_reset_cb, ctx, &ctx->timer);
+    }
+    tal_sw_timer_stop(ctx->timer);
+    tal_sw_timer_start(ctx->timer, pulse_ms, TAL_TIMER_ONCE);
 }
 
 /* ------------------------------------------------------------------ */
@@ -154,21 +236,77 @@ static void parse_mqtt_topic(const char *topic, const char *data)
         return;
     }
 
+    /* Parse "/switch/{n}/{leaf}" or "/socket/{n}/{leaf}" as three distinct
+     * tokens and dispatch by exact strcmp on the leaf -- NOT by sscanf'ing
+     * a literal suffix like "/switch/%d/set" and trusting a return value of
+     * 1. That pattern is a footgun: sscanf() counts %d as matched and
+     * returns 1 even when the *rest* of the literal text doesn't match
+     * (e.g. "/switch/2/state" against format "/switch/%d/set" -- "2" gets
+     * assigned before the "/set" vs "/state" literal mismatch is hit), so
+     * it silently accepts topics it was never meant to. This bit in
+     * production: after broadening the subscription (see subscribe_all()
+     * in ha_mqtt.c) to also catch /toggle and /pulse, the device started
+     * receiving its own .../switch/{n}/state publishes back and misfiring
+     * them as "set" commands -- a feedback loop that rapidly cycled a
+     * relay. Both the subscription and this parser needed fixing. */
+    char kind[8] = {0};
+    char leaf[8] = {0};
     int channel = 0;
-    if (sscanf(rest, "/switch/%d/set", &channel) == 1 && channel > 0) {
-        bool value = (strcmp(data, "ON") == 0 || strcmp(data, "1") == 0 ||
-                      strcmp(data, "true") == 0);
-        handle_switch_set((uint8_t)channel, value);
+    if (sscanf(rest, "/%7[a-z]/%d/%7s", kind, &channel, leaf) != 3 || channel <= 0) {
+        PR_DEBUG("Unhandled MQTT topic: %s", topic);
         return;
     }
 
-    if (sscanf(rest, "/socket/%d/set", &channel) == 1 && channel > 0) {
-        bool value = (strcmp(data, "ON") == 0 || strcmp(data, "1") == 0 ||
-                      strcmp(data, "true") == 0);
-        PR_INFO("Socket ch%d manually set to %s by HA", channel, value ? "ON" : "OFF");
-        s_socket_state[channel - 1] = value;
-        tuya_cloud_report_bool(relay_channel_to_dp((uint8_t)channel), value);
-        ha_mqtt_publish_socket_state((uint8_t)channel, value);
+    bool is_switch = (strcmp(kind, "switch") == 0);
+    bool is_socket = (!is_switch && strcmp(kind, "socket") == 0);
+    if (!is_switch && !is_socket) {
+        PR_DEBUG("Unhandled MQTT topic: %s", topic);
+        return;
+    }
+
+    bool value = (strcmp(data, "ON") == 0 || strcmp(data, "1") == 0 ||
+                  strcmp(data, "true") == 0);
+
+    if (strcmp(leaf, "set") == 0) {
+        if (is_switch) {
+            handle_switch_set((uint8_t)channel, value);
+        } else if (channel <= CFG_SOCKET_COUNT_MAX) {
+            set_socket_direct((uint8_t)channel, value);
+        } else {
+            PR_WARN("Socket channel %d out of range", channel);
+        }
+        return;
+    }
+
+    /* Toggle: flip whatever the channel's current state is, so HA doesn't
+     * need to read state first -- any payload triggers it. Sockets keep
+     * their persistent state, same as /set: no auto-reset here. */
+    if (strcmp(leaf, "toggle") == 0) {
+        if (is_switch) {
+            if (channel <= CFG_SWITCH_COUNT_MAX) {
+                handle_switch_set((uint8_t)channel, !s_switch_state[channel - 1]);
+            } else {
+                PR_WARN("Switch channel %d out of range (toggle)", channel);
+            }
+        } else {
+            if (channel <= CFG_SOCKET_COUNT_MAX) {
+                set_socket_direct((uint8_t)channel, !s_socket_state[channel - 1]);
+            } else {
+                PR_WARN("Socket channel %d out of range (toggle)", channel);
+            }
+        }
+        return;
+    }
+
+    /* Pulse: momentary ON then auto-reset OFF after socket_auto_reset_ms --
+     * any payload triggers it. For switch channels this is a momentary
+     * override of otherwise-persistent behavior. */
+    if (strcmp(leaf, "pulse") == 0) {
+        if (is_switch) {
+            handle_switch_pulse((uint8_t)channel);
+        } else {
+            handle_socket_pulse((uint8_t)channel);
+        }
         return;
     }
 
@@ -234,6 +372,7 @@ OPERATE_RET dp_bridge_init(const app_config_t *cfg)
     memset(s_switch_state, 0, sizeof(s_switch_state));
     memset(s_socket_state, 0, sizeof(s_socket_state));
     memset(s_reset_ctx,    0, sizeof(s_reset_ctx));
+    memset(s_switch_pulse_ctx, 0, sizeof(s_switch_pulse_ctx));
 
     PR_INFO("Bridge initialized: %d switch + %d socket channels",
              cfg->switch_count, cfg->socket_count);

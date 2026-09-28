@@ -134,6 +134,15 @@ OPERATE_RET config_apply_json(app_config_t *cfg, const char *json_str)
         JSON_INT("socket_count",      socket_count,          uint8_t);
         JSON_INT("socket_auto_reset_ms", socket_auto_reset_ms, uint32_t);
 
+        /* switch_count/socket_count are used as array-index bounds
+         * throughout dp_bridge.c and tuya_cloud.c (e.g.
+         * tuya_cloud_report_all()'s stack-allocated dp_ids[]/values[]
+         * arrays, sized CFG_*_COUNT_MAX). An unclamped value from a
+         * malformed/corrupted saved config would cause out-of-bounds
+         * reads/writes there -- clamp at the point external data enters. */
+        if (cfg->switch_count > CFG_SWITCH_COUNT_MAX) cfg->switch_count = CFG_SWITCH_COUNT_MAX;
+        if (cfg->socket_count > CFG_SOCKET_COUNT_MAX) cfg->socket_count = CFG_SOCKET_COUNT_MAX;
+
         cJSON *arr = cJSON_GetObjectItemCaseSensitive(ch, "socket_auto_reset");
         if (cJSON_IsArray(arr)) {
             cfg->socket_auto_reset_mask = 0;

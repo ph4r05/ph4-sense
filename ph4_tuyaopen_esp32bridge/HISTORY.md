@@ -317,6 +317,102 @@ Not yet done: the `socket`/`relay_trigger` (momentary, DP 121-126/111-120)
 channels haven't been round-trip tested yet, only `switch`. HA-side
 entities/automations for the new MQTT topics haven't been built.
 
+## Socket/momentary channel round-trip verified, 2026-09-28
+
+Tested both directions on channel 1 (DP 121, `relay_trigger_1`):
+
+- **MQTT → Tuya** (`mosquitto_pub .../socket/1/set ON` then `OFF`): direct
+  set, confirmed via serial log (`Reported DP 122 = true/false` for ch2 —
+  clean, no errors) and MQTT echo. As implemented, this path does **not**
+  apply the auto-reset timer — it stays at whatever was last set until
+  explicitly changed. Only the Tuya-triggered path below auto-resets.
+- **Tuya → MQTT** (DP 121 = `true` sent via Tuya IoT Platform's Device
+  Debugging): full pulse cycle captured cleanly in one continuous serial
+  capture — `DP 121 = true (from cloud)` → `Tuya -> socket ch1 = ON` →
+  published `socket/1/state = ON` → `Socket ch1 auto-reset in 500 ms` →
+  ~1s later `Socket ch1 auto-reset -> OFF` → `Reported DP 121 = false` →
+  published `socket/1/state = OFF`. Confirms the full round trip: Tuya
+  trigger → MQTT → auto-reset timer → DP reported back to Tuya cloud → MQTT
+  again. (Fired twice in the test — likely a retry from Tuya's console side,
+  harmless, both cycles identical.)
+
+Both channel types (`switch` persistent-toggle, `socket` momentary-pulse)
+are now fully verified in both directions.
+
+## Memory-safety audit, 2026-09-28
+
+User asked for a full pass over array-indexing/bounds-checking after the
+socket/set bounds-check bug found above. Found one more real issue:
+`config_apply_json()` never clamped `switch_count`/`socket_count` after
+reading them from JSON, even though they're trusted as array-index bounds
+throughout `dp_bridge.c` and `tuya_cloud.c` (backing arrays are fixed at
+`CFG_SWITCH_COUNT_MAX`/`CFG_SOCKET_COUNT_MAX` = 16). Worst case:
+`tuya_cloud_report_all()` allocates fixed-size **stack** arrays sized
+`CFG_SWITCH_COUNT_MAX + CFG_SOCKET_COUNT_MAX` and loops `i <
+s_cfg->switch_count` — an unclamped value >16 would overflow the stack, not
+just BSS. Not reachable today (nothing sets these from untrusted input
+yet), but latent. Fixed with a single clamp at the point external data
+enters (`config_apply_json`), closing it for every consumer transitively.
+Everything else checked out already safe: `dp_map.h`'s lookup functions
+self-bound against their fixed 16-entry tables regardless of input;
+`tuya_cloud_report_bool`/`report_multi` already bound against the fixed
+array size, not the config value; the CLI `switch` command routes through
+the safe path; `ha_mqtt.c`'s message payload copy is exact-size with a
+NULL check.
+
+## MQTT self-echo feedback loop — relay damage incident, 2026-09-28
+
+Added `/switch/{n}/toggle`, `/socket/{n}/toggle`, `/switch/{n}/pulse`,
+`/socket/{n}/pulse` MQTT commands (mirroring the existing `/set`, and the
+already-verified Tuya-triggered auto-reset pulse behavior, now reachable
+from HA too). To subscribe to the new leaves without adding more explicit
+`mqtt_client_subscribe()` calls, broadened `ha_mqtt.c`'s subscription from
+`switch/+/set` to a `switch/+/+` wildcard.
+
+That wildcard also matches `switch/{n}/state` — the topic the device
+itself publishes. Combined with a latent flaw in `parse_mqtt_topic()`
+(`sscanf(rest, "/switch/%d/set", &channel) == 1` returns **true** even when
+the topic is `/switch/2/state`, not `/switch/2/set` — `sscanf` counts `%d`
+as matched and stops at the first literal mismatch, but the return value
+only reflects conversions completed *before* the mismatch, not whether the
+whole format matched), the device started receiving its own state
+publishes back and misinterpreting them as `set` commands. Loop: DP
+changes → publish `state` → self-subscribed wildcard delivers it back →
+misparsed as `set` → re-report to Tuya + re-publish `state` → repeat,
+as fast as the MQTT round trip allows.
+
+**Live consequence on real hardware**: switch channel 2's relay cycled
+rapidly on/off, user reported physical relay damage risk in real time.
+Immediate action taken: user cut power to the device while the fix was
+prepared, per general advice to physically disconnect rather than wait for
+a software fix when actuators are cycling uncontrolled.
+
+**Fix, two parts** (both needed — either alone leaves the other exploitable
+by future changes):
+1. `ha_mqtt.c`: replaced the `+/+` wildcard with explicit per-leaf
+   subscriptions (`switch/+/set`, `switch/+/toggle`, `switch/+/pulse`, same
+   trio for `socket`) — never matches `.../state`.
+2. `dp_bridge.c`'s `parse_mqtt_topic()`: rewritten to parse
+   `/{kind}/{n}/{leaf}` as three distinct tokens (`sscanf(rest,
+   "/%7[a-z]/%d/%7s", kind, &channel, leaf)`) and dispatch by exact
+   `strcmp` on `leaf`, instead of per-command sscanf calls with a trailing
+   literal suffix. This closes the whole class of bug, not just this one
+   instance — any topic whose third segment isn't exactly `set`/`toggle`/
+   `pulse` now falls through to the "Unhandled MQTT topic" debug log
+   instead of being loosely matched.
+
+Verified after reflashing: idle-watched the full MQTT topic tree for 20s
+with zero traffic (no residual loop), then exercised all four new commands
+(`switch/4/toggle` x2, `socket/3/pulse`, `switch/5/pulse`) with a
+continuous serial capture — each fired exactly once, reported correctly to
+both Tuya cloud and MQTT, no repeats.
+
+**Lesson for future MQTT topic/subscription changes on this bridge**:
+never widen a subscription wildcard without checking it doesn't also match
+the device's own publish topics, and never trust an `sscanf` return count
+as proof the literal suffix matched — verify the trailing text explicitly
+(token + strcmp, as now) rather than embedding it in the format string.
+
 ## Where to look for more detail
 
 - `ph4_tuya_esp32bridge/docs/sdk-selection/README.md` — full SDK comparison
