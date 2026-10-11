@@ -17,9 +17,18 @@ Primary use case is understanding the home automation topology — device addres
 
 A single Jupyter notebook that connects to the Tuya OpenAPI, runs a multi-pronged discovery of homes/devices/scenes, and saves the result as a JSON dump + CSV.
 
-**Dependency:** `tuya-connector-python` (PyPI). It handles HMAC signing and token refresh transparently.
+**Dependencies:** `tuya-connector-python` + `python-dotenv` (PyPI).
+`tuya-connector-python` handles HMAC signing and token refresh
+transparently. Pinned versions (verified working 2026-09-28) are in
+`requirements.txt` — install with `pip install -r tuya/requirements.txt`
+rather than latest, since both this library's signing scheme and
+`tinytuya`'s local protocol handling (used downstream by
+`localtuya_config.ipynb`) have changed across versions before.
 
-**Credentials** are loaded from env vars (or a `.env` file via `python-dotenv`):
+**Credentials** are loaded from env vars via a `.env` file —
+**at the repo root** (`ph4-sense/.env`), *not* `tuya/.env`: the notebook
+does `load_dotenv("../.env")`, one level up from this directory. See
+`.env.example` in this directory for the exact variable names to copy.
 
 | Var | Required | Notes |
 |-----|----------|-------|
@@ -28,6 +37,24 @@ A single Jupyter notebook that connects to the Tuya OpenAPI, runs a multi-pronge
 | `TUYA_API_ENDPOINT` | no | Default: `https://openapi.tuyaeu.com` |
 | `TUYA_APP_USER_UID` | no | Real app-user uid (see below) |
 | `TUYA_HOME_IDS` | no | Comma-separated home IDs (manual override) |
+
+These credentials require, in order: a Tuya IoT Platform account, a
+Cloud Project (region must match the Smart Life/Tuya Smart app account's
+region), and that app account **linked** to the project (one-time QR
+scan under the project's Devices tab) before any devices are visible to
+the API at all. The project's IoT Core subscription also needs to be
+currently active — it runs on a free trial that needs periodic manual
+renewal and can lapse; see `ph4_tuyaopen_esp32bridge/LIMITS.md`. Full
+step-by-step walkthrough (written for "redo this in N years" purposes):
+`MIGRATION.md`'s **"Repeating this in N years"** section.
+
+**Running headlessly** (no Jupyter UI, e.g. to refresh the export from a
+script or this assistant): `jupyter nbconvert --to notebook --execute`
+needs `nbconvert`/`nbclient`/`ipykernel` installed, and a kernel
+registered against this project's venv (`python -m ipykernel install
+--user --name <name>`), then
+`--ExecutePreprocessor.kernel_name=<name>`. Verified working this way
+2026-09-28.
 
 ## Key design decisions & gotchas
 
@@ -65,6 +92,25 @@ Two styles exist in the Tuya API:
 Both are wrapped in helper functions `get_paged()` and `get_cursor_paged()`.
 
 ## Output format
+
+**`tuya_export/` is its own separate git repo** (private:
+`ph4r05/ph4-smart-priv`), not tracked by this `ph4-sense` repo —
+it holds `local_key`s, device_ids, MACs and GPS coordinates. It just
+happens to live at this path so the export/analysis scripts and
+notebooks don't need separate configuration. Don't be surprised to find
+a `.git` in there, and don't `rm -rf` it thinking it's disposable
+scratch output.
+
+**Layout inside that private repo**: cloud export dumps
+(`tuya_export_*.json`, `localtuya_*.json/.yaml/.md`, `localtuya_templates/`)
+sit at its root, as produced by this notebook and `localtuya_config.ipynb`.
+A separate **`ha/` subfolder** holds everything describing the live HA
+setup instead — `switch_bindings.json`, `SCENE_SWITCHES.md`,
+`ha_state_snapshot.json`, and the generated `automations_buttons.yaml` /
+`scenes_backup.yaml` / `scripts_backup.yaml` backups (see
+`gen_button_automations.py`, `gen_scenes_backup.py`, `ha_map_state.py`,
+`scene_switches_worklist.py` in this directory, all public — they're
+reusable tooling, the generated output is what's private).
 
 ### Files produced
 
@@ -340,6 +386,12 @@ Both saved under `tuya_export/` with a timestamp suffix:
 `local_key`, `mac`, `sn` are merged from the `factory` endpoint.
 
 ## What still needs work / next steps
+
+**Status as of 2026-09-28**: re-ran the notebook headlessly end-to-end
+against the live account (95→96 devices, see `MIGRATION.md`'s "Second
+pass" section) — core device/home/scene/automation enumeration all work
+as described below. The items below are still-open code-level gaps found
+by reading the notebook, not things that broke in practice.
 
 - **Scenes & automations require homes.** If home IDs cannot be fetched (permission denied on both `/v1.0/homes/{id}` and the detail endpoint), scenes and automations will be empty. Getting a real app-user uid (`TUYA_APP_USER_UID`) is the reliable fix.
 - **`iot-01/associated-users/devices` may not return devices** if none are linked to the cloud project. In that case, the user must link devices in the Tuya IoT console under the project's "Link Devices" tab, or provide home IDs / user uid directly.

@@ -15,3 +15,8 @@ ph4_esp32/config.json
 tuya_config.local.h
 ph4_tuyaopen_esp32bridge/tuyaopen/
 ph4_tuyaopen_esp32bridge/.build/
+
+# Tuya cloud export dumps + HA migration backups (device names, scene
+# logic, entity states, GPS attributes) -- private repo, see
+# tuya/README-export.md. Never commit these here.
+tuya/tuya_export/

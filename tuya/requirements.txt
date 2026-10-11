@@ -1,0 +1,9 @@
+# Pinned to what was actually used/verified for the Tuya cloud export +
+# LocalTuya dp_id resolution pipeline (see MIGRATION.md's "Repeating this
+# in N years" section). Versions matter here: tinytuya's local protocol
+# handling and tuya-connector-python's request-signing scheme have both
+# changed across versions before.
+tuya-connector-python==0.1.2
+tinytuya==1.17.6
+PyYAML==6.0.3
+python-dotenv==1.2.1
